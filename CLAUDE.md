@@ -10,19 +10,18 @@ Agent Skills を MCP サーバー経由で管理・実行するシステムで�
 - **MCP**: FastMCP (stdio/HTTP 両対応)
 - **LLM**: LiteLLM (Bedrock、Vertex AI、Anthropic API 対応)
 - **Agent Skills**: Anthropic 公式仕様準拠
-- **Python**: 3.10+
+- **Python**: 3.13+
 
 ## 提供する MCP ツール
 
-1. **skills-search**: スキル検索 (name/description で検索)
-2. **skills-describe**: スキル詳細取得 (SKILL.md 全体)
-3. **skills-execute**: スキル実行 (LLM にスキルコンテキスト注入して実行)
+1. **skills-search**: スキル検索 (name/description で検索、メタデータ含む)
+2. **skills-execute**: スキル実行 (LLM にスキルコンテキスト注入して実行)
 
 ## コーディングガイドライン
 
 ### 型アノテーション
 
-- Python 3.10+ の新しい型構文を使用
+- Python 3.13+ の型構文を使用
 - 小文字組み込み型を優先: `list[str]`, `dict[str, Any]`
 - Union は パイプ構文を使用: `str | None` (Optional の代わり)
 

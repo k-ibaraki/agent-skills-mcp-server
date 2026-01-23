@@ -2,12 +2,11 @@
 name = "agent-skills-mcp-server"
 version = "0.1.0"
 description = "MCP server for managing and executing Agent Skills with governance"
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 license = { text = "Apache-2.0" }
 authors = [
     { name = "agent-skills-mcp-server" }
 ]
-readme = "README.md"
 
 dependencies = [
     "fastmcp>=2.14.3,<3.0.0",
@@ -16,6 +15,7 @@ dependencies = [
     "pydantic-settings>=2.12.0,<3.0.0",
     "pyyaml>=6.0.3,<7.0.0",
     "boto3>=1.42.32,<2.0.0",  # AWS Bedrock用
+    "typer[all]>=0.17.0,<1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -27,7 +27,7 @@ dev = [
 ]
 
 [project.scripts]
-agent-skills-mcp = "agent_skills_mcp.server:main"
+agent-skills-mcp = "agent_skills_mcp.server:app"
 check = "scripts.check:main"
 fix = "scripts.fix:main"
 test = "scripts.test:main"
@@ -39,9 +39,12 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent_skills_mcp"]
 
+[tool.uv]
+package = true
+
 [tool.ruff]
 line-length = 88
-target-version = "py310"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "C4", "UP"]

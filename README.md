@@ -4,13 +4,27 @@ MCP (Model Context Protocol) サーバーを使って Agent Skills を管理・�
 
 ## 特徴
 
-- **3つのMCPツール**: スキル検索、詳細取得、実行機能を提供
+- **2つのMCPツール**: スキル検索と実行機能を提供
 - **マルチプロバイダー対応**: Anthropic API、AWS Bedrock、Google Vertex AI に対応（LiteLLM経由）
 - **Transport柔軟性**: STDIO（Claude Desktop統合）とHTTPの両方をサポート
 - **型安全**: Pydanticによる完全な型チェックとバリデーション
 - **Agent Skills仕様準拠**: Anthropic公式仕様に準拠したスキル管理
 
 ## インストール
+
+### 前提条件
+
+- Python 3.13 以上
+- [uv](https://docs.astral.sh/uv/) - Pythonパッケージマネージャー
+
+uvのインストール:
+```bash
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
 
 ### 1. リポジトリのクローン
 
@@ -21,14 +35,14 @@ cd agent-skills-mcp-server
 
 ### 2. 依存関係のインストール
 
-```bash
-pip install -e .
-```
-
-または開発用依存関係も含める場合：
+[uv](https://docs.astral.sh/uv/)を使用して依存関係をインストールします：
 
 ```bash
-pip install -e ".[dev]"
+# 本番用依存関係のみ
+uv sync --no-dev
+
+# 開発用依存関係も含める（推奨）
+uv sync
 ```
 
 ### 3. 環境変数の設定
@@ -68,9 +82,13 @@ Claude Desktopの設定ファイル（`claude_desktop_config.json`）に以下�
 {
   "mcpServers": {
     "agent-skills": {
-      "command": "python",
-      "args": ["-m", "agent_skills_mcp.server"],
-      "cwd": "/path/to/agent-skills-mcp-server",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/path/to/agent-skills-mcp-server",
+        "run",
+        "agent-skills-mcp"
+      ],
       "env": {
         "ANTHROPIC_API_KEY": "sk-ant-your-api-key-here"
       }
@@ -79,29 +97,36 @@ Claude Desktopの設定ファイル（`claude_desktop_config.json`）に以下�
 }
 ```
 
-Claude Desktopを再起動すると、3つのMCPツールが利用可能になります。
+**注意**: `/path/to/agent-skills-mcp-server` は実際のプロジェクトディレクトリのフルパスに置き換えてください。
 
-### HTTPサーバーとして起動
+Claude Desktopを再起動すると、MCPツールが利用可能になります。
 
-```bash
-python -m agent_skills_mcp.server --transport http --port 8000
-```
-
-cURLでテスト：
+### HTTPサーバーとして起動（streamable-http）
 
 ```bash
-curl -X POST http://localhost:8000/mcp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "tools/call",
-    "params": {
-      "name": "skills-search",
-      "arguments": {"query": "example"}
-    },
-    "id": 1
-  }'
+# ローカルで起動
+uv run agent-skills-mcp --transport http --host 127.0.0.1 --port 8000
+
+# または0.0.0.0でリッスン（外部からアクセス可能）
+uv run agent-skills-mcp --transport http --host 0.0.0.0 --port 8000
 ```
+
+**注意**: HTTPモードは、MCPプロトコルのstreamable-http transportを使用します。通常のREST APIではなく、MCP対応クライアントからの接続が必要です。
+
+### Dockerで起動
+
+```bash
+# イメージをビルドして起動
+docker compose up -d
+
+# ログを確認
+docker compose logs -f
+
+# 停止
+docker compose down
+```
+
+**前提条件**: `.env` ファイルを作成してAPIキーなどの環境変数を設定してください。
 
 ## 提供するMCPツール
 
@@ -113,37 +138,21 @@ curl -X POST http://localhost:8000/mcp \
 - `query` (optional): description内を検索（部分一致、大文字小文字区別なし）
 - `name_filter` (optional): name前方一致フィルタ（大文字小文字区別なし）
 
-**使用例**:
-```python
-# Claude Desktop内で:
-# "skills-search ツールを使って、PDFに関連するスキルを検索してください"
-```
+**レスポンス**:
+- `name`: スキル名
+- `description`: スキルの説明
+- `license`: ライセンス（存在する場合）
+- `metadata`: 追加メタデータ（author、versionなど）
 
-### 2. `skills-describe`
-
-指定したスキルの詳細情報を取得します（SKILL.md全体）。
-
-**パラメータ**:
-- `skill_name` (required): 取得するスキルの名前
-
-**使用例**:
-```python
-# "skills-describe ツールを使って、example-skillの詳細を教えてください"
-```
-
-### 3. `skills-execute`
+### 2. `skills-execute`
 
 スキルをLLMに注入して実行します。
 
 **パラメータ**:
 - `skill_name` (required): 実行するスキルの名前
 - `user_prompt` (required): ユーザーのプロンプト
-- `model` (optional): 使用するモデル（デフォルト: `anthropic/claude-3-5-sonnet-20241022`）
 
-**使用例**:
-```python
-# "skills-execute ツールを使って、example-skillで'Hello'というメッセージをテストしてください"
-```
+**注意**: 使用するモデルはサーバーの環境変数`DEFAULT_MODEL`で設定します。
 
 ## スキルの作成
 
@@ -289,7 +298,6 @@ uv run pytest
 │   FastMCP Server        │
 │  ┌──────────────────┐   │
 │  │ skills-search    │   │
-│  │ skills-describe  │   │
 │  │ skills-execute   │   │
 │  └──────────────────┘   │
 └────┬─────────────┬──────┘
