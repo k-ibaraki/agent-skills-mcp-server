@@ -1,5 +1,6 @@
 """Data models for Agent Skills."""
 
+import yaml
 from pydantic import BaseModel, Field
 
 
@@ -55,22 +56,12 @@ class Skill(BaseModel):
     def full_content(self) -> str:
         """Get complete skill content (frontmatter + markdown)."""
         # Reconstruct original SKILL.md format for LLM consumption
-        import yaml
-
         frontmatter_yaml = yaml.dump(
             self.frontmatter.model_dump(exclude_none=True),
             allow_unicode=True,
             sort_keys=False,
         )
         return f"---\n{frontmatter_yaml}---\n\n{self.markdown_body}"
-
-
-class SkillSearchResult(BaseModel):
-    """Search result for a skill."""
-
-    name: str = Field(..., description="Skill name")
-    description: str = Field(..., description="Skill description")
-    directory_path: str = Field(..., description="Path to skill directory")
 
 
 class SkillExecutionResult(BaseModel):
