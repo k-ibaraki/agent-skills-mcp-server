@@ -1,9 +1,33 @@
 """FastMCP server providing Agent Skills management and execution tools."""
 
+import logging
+import sys
+
+import typer
 from fastmcp import FastMCP
 
 from agent_skills_mcp.llm_client import LLMClient
 from agent_skills_mcp.skills_manager import SkillsManager
+
+# Typer app
+app = typer.Typer()
+
+
+def setup_logging():
+    """
+    Configure logging to output to stderr.
+    This prevents stdout pollution for stdio transport.
+    """
+    log_formatter = logging.Formatter("%(asctime)s [%(levelname)s] - %(message)s")
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
+    root_logger.handlers.clear()
+
+    stream_handler = logging.StreamHandler(sys.stderr)
+    stream_handler.setFormatter(log_formatter)
+    root_logger.addHandler(stream_handler)
+
 
 # Initialize FastMCP server
 mcp = FastMCP("agent-skills-mcp-server")
@@ -25,7 +49,7 @@ async def skills_search(
         name_filter: Filter by skill name prefix (case-insensitive).
 
     Returns:
-        List of matching skills with name, description, and directory path.
+        List of matching skills with name, description, and metadata.
 
     Examples:
         - skills_search(query="pdf") - Find skills related to PDF processing
@@ -34,57 +58,19 @@ async def skills_search(
     """
     results = skills_manager.search_skills(query=query, name_filter=name_filter)
 
-    return [
-        {
-            "name": skill.name,
-            "description": skill.description,
-            "directory_path": skill.directory_path,
-        }
-        for skill in results
-    ]
-
-
-@mcp.tool()
-async def skills_describe(skill_name: str) -> dict:
-    """Get complete details of a specific Agent Skill.
-
-    Args:
-        skill_name: Name of the skill to describe.
-
-    Returns:
-        Complete skill information including frontmatter metadata and markdown content.
-
-    Raises:
-        ValueError: If skill not found or invalid.
-
-    Examples:
-        - skills_describe("example-skill") - Get full details of the example skill
-    """
-    skill = skills_manager.load_skill(skill_name)
-
-    return {
-        "name": skill.name,
-        "description": skill.description,
-        "directory_path": skill.directory_path,
-        "frontmatter": skill.frontmatter.model_dump(exclude_none=True),
-        "markdown_body": skill.markdown_body,
-        "full_content": skill.full_content,
-    }
+    return [skill.frontmatter.model_dump(exclude_none=True) for skill in results]
 
 
 @mcp.tool()
 async def skills_execute(
     skill_name: str,
     user_prompt: str,
-    model: str | None = None,
 ) -> dict:
     """Execute an Agent Skill by injecting it into an LLM as system prompt.
 
     Args:
         skill_name: Name of the skill to execute.
         user_prompt: User's prompt/request to send to the LLM.
-        model: Optional model override (e.g., "anthropic/claude-3-5-sonnet-20241022").
-               If not specified, uses default model from config.
 
     Returns:
         Execution result including LLM response, model used, token usage, and execution time.
@@ -92,10 +78,6 @@ async def skills_execute(
     Raises:
         ValueError: If skill not found or model credentials not configured.
         Exception: If LLM API call fails.
-
-    Examples:
-        - skills_execute("example-skill", "Hello, test the skill")
-        - skills_execute("example-skill", "Process this data", model="anthropic/claude-3-5-sonnet-20241022")
     """
     # Load skill
     skill = skills_manager.load_skill(skill_name)
@@ -105,7 +87,6 @@ async def skills_execute(
         skill_name=skill_name,
         skill_content=skill.full_content,
         user_prompt=user_prompt,
-        model=model,
     )
 
     return {
@@ -118,30 +99,39 @@ async def skills_execute(
     }
 
 
-def main():
-    """Main entry point for the MCP server."""
-    import sys
+@app.command()
+def main(
+    transport: str = typer.Option(
+        "stdio",
+        "--transport",
+        help="Transport protocol to use ('stdio' or 'http')",
+    ),
+    host: str = typer.Option(
+        "127.0.0.1",
+        "--host",
+        help="Host for HTTP server (http mode only)",
+    ),
+    port: int = typer.Option(
+        8000,
+        "--port",
+        help="Port for HTTP server (http mode only)",
+    ),
+):
+    """
+    Start the MCP server with stdio or http transport.
+    """
+    setup_logging()
 
-    # Check for transport argument
-    transport = "stdio"  # Default to stdio for Claude Desktop
-    port = 8000
-
-    if "--transport" in sys.argv:
-        idx = sys.argv.index("--transport")
-        if idx + 1 < len(sys.argv):
-            transport = sys.argv[idx + 1]
-
-    if "--port" in sys.argv:
-        idx = sys.argv.index("--port")
-        if idx + 1 < len(sys.argv):
-            port = int(sys.argv[idx + 1])
-
-    # Run server with specified transport
-    if transport == "http":
-        mcp.run(transport="streamable-http", port=port)
+    if transport == "stdio":
+        logging.info("Starting MCP server with stdio transport...")
+        mcp.run()
+    elif transport == "http":
+        logging.info(f"Starting MCP server with http transport on {host}:{port}...")
+        mcp.run(transport="http", host=host, port=port)
     else:
-        mcp.run(transport="stdio")
+        logging.error(f"Invalid transport: {transport}. Use 'stdio' or 'http'.")
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":
-    main()
+    app()
