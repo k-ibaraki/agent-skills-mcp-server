@@ -7,7 +7,7 @@ import yaml
 from pydantic import ValidationError
 
 from agent_skills_mcp.config import get_config
-from agent_skills_mcp.models import Skill, SkillFrontmatter, SkillSearchResult
+from agent_skills_mcp.models import Skill, SkillFrontmatter
 
 
 class SkillsManager:
@@ -25,43 +25,6 @@ class SkillsManager:
 
         if not self.skills_directory.exists():
             raise ValueError(f"Skills directory not found: {self.skills_directory}")
-
-    def discover_skills(self) -> list[SkillSearchResult]:
-        """Discover all valid skills in the skills directory.
-
-        Returns:
-            List of skill search results with name, description, and path.
-
-        Raises:
-            ValueError: If skills directory doesn't exist.
-        """
-        results = []
-
-        # Scan for skill directories (containing SKILL.md)
-        for skill_dir in self.skills_directory.iterdir():
-            if not skill_dir.is_dir():
-                continue
-
-            skill_file = skill_dir / "SKILL.md"
-            if not skill_file.exists():
-                continue
-
-            try:
-                # Parse and validate skill
-                skill = self._parse_skill_md(skill_file)
-
-                results.append(
-                    SkillSearchResult(
-                        name=skill.name,
-                        description=skill.description,
-                        directory_path=str(skill_dir),
-                    )
-                )
-            except (ValidationError, ValueError, yaml.YAMLError):
-                # Skip invalid skills silently during discovery
-                continue
-
-        return results
 
     def load_skill(self, skill_name: str) -> Skill:
         """Load complete skill content by name.
@@ -90,7 +53,7 @@ class SkillsManager:
         self,
         query: str | None = None,
         name_filter: str | None = None,
-    ) -> list[SkillSearchResult]:
+    ) -> list[Skill]:
         """Search for skills by query and/or name filter.
 
         Args:
@@ -98,9 +61,9 @@ class SkillsManager:
             name_filter: Name prefix filter (case-insensitive).
 
         Returns:
-            List of matching skill search results.
+            List of matching Skill objects.
         """
-        all_skills = self.discover_skills()
+        all_skills = self._load_all_skills()
 
         # Apply filters
         filtered_skills = all_skills
@@ -122,6 +85,30 @@ class SkillsManager:
             ]
 
         return filtered_skills
+
+    def _load_all_skills(self) -> list[Skill]:
+        """Load all valid skills from the skills directory.
+
+        Returns:
+            List of Skill objects.
+        """
+        results = []
+
+        for skill_dir in self.skills_directory.iterdir():
+            if not skill_dir.is_dir():
+                continue
+
+            skill_file = skill_dir / "SKILL.md"
+            if not skill_file.exists():
+                continue
+
+            try:
+                skill = self._parse_skill_md(skill_file)
+                results.append(skill)
+            except (ValidationError, ValueError, yaml.YAMLError):
+                continue
+
+        return results
 
     def validate_skill(self, skill_path: Path) -> tuple[bool, str | None]:
         """Validate a skill file.
