@@ -8,7 +8,7 @@ Agent Skills を MCP サーバー経由で管理・実行するシステムで�
 
 **技術スタック**:
 - **MCP**: FastMCP (stdio/HTTP 両対応)
-- **LLM**: LiteLLM (Bedrock、Vertex AI、Anthropic API 対応)
+- **LLM**: LangChain (Bedrock、Vertex AI、Anthropic API 対応)
 - **Agent Skills**: Anthropic 公式仕様準拠
 - **Python**: 3.13+
 
@@ -106,17 +106,23 @@ Instructions for the LLM...
 
 ### LLM プロバイダー対応
 
-モデル指定形式:
-- Anthropic: `anthropic/claude-3-5-sonnet-20241022`
-- Bedrock: `bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0`
-- Vertex AI: `vertex_ai/claude-3-5-sonnet-v2@20241022`
+モデル指定形式 (必ずプレフィックスが必要):
+- **Anthropic API**:
+  - `anthropic/claude-3-5-sonnet-20241022`
+  - `anthropic/claude-sonnet-4-5-20250929` (最新)
+- **AWS Bedrock**:
+  - `bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0`
+  - `bedrock/us.anthropic.claude-sonnet-4-5-v1:0` (最新)
+- **Google Vertex AI**:
+  - `vertex_ai/claude-3-5-sonnet-v2@20241022`
+  - `vertex_ai/claude-sonnet-4-5@20250929` (最新)
 
-認証情報は環境変数で管理 (.env ファイル)。
+認証情報は環境変数で管理 (.env ファイル)。詳細は `.env.example` を参照。
 
 ### Transport モード
 
 - **stdio**: Claude Desktop 統合用 (デフォルト)
-- **http**: Web 展開用 (`--transport http --port 8000`)
+- **http**: Web 展開用 (`--transport http --port 8080`)
 
 ## テスト戦略
 
@@ -217,5 +223,5 @@ mypy または pyright を使用した型チェックを検討。
 
 - [Agent Skills Specification](https://agentskills.io/specification)
 - [FastMCP Documentation](https://gofastmcp.com)
-- [LiteLLM Documentation](https://docs.litellm.ai)
+- [LangChain Documentation](https://python.langchain.com/)
 - [Pydantic Documentation](https://docs.pydantic.dev)

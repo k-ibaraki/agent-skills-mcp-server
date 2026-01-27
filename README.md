@@ -5,7 +5,7 @@ MCP (Model Context Protocol) サーバーを使って Agent Skills を管理・�
 ## 特徴
 
 - **2つのMCPツール**: スキル検索と実行機能を提供
-- **マルチプロバイダー対応**: Anthropic API、AWS Bedrock、Google Vertex AI に対応（LiteLLM経由）
+- **マルチプロバイダー対応**: Anthropic API、AWS Bedrock、Google Vertex AI に対応（LangChain経由）
 - **Transport柔軟性**: STDIO（Claude Desktop統合）とHTTPの両方をサポート
 - **型安全**: Pydanticによる完全な型チェックとバリデーション
 - **Agent Skills仕様準拠**: Anthropic公式仕様に準拠したスキル管理
@@ -53,21 +53,29 @@ uv sync
 cp .env.example .env
 ```
 
-`.env` ファイルを編集してAPIキーを設定：
+`.env` ファイルを編集してAPIキーとデフォルトモデルを設定：
 
 ```bash
-# Anthropic API（推奨）
+# デフォルトLLMモデル（以下のいずれかを選択）
+DEFAULT_MODEL=anthropic/claude-3-5-sonnet-20241022
+# DEFAULT_MODEL=bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0
+# DEFAULT_MODEL=vertex_ai/claude-3-5-sonnet-v2@20241022
+
+# Anthropic API（直接APIを使用する場合）
 ANTHROPIC_API_KEY=sk-ant-your-api-key-here
 
-# AWS Bedrock（オプション）
-# AWS_ACCESS_KEY_ID=your-access-key
-# AWS_SECRET_ACCESS_KEY=your-secret-key
+# AWS Bedrock（Bedrockを使用する場合）
+# AWS_ACCESS_KEY_ID=your-access-key-id
+# AWS_SECRET_ACCESS_KEY=your-secret-access-key
 # AWS_REGION_NAME=us-east-1
 
-# Google Vertex AI（オプション）
-# VERTEXAI_PROJECT=your-project-id
+# Google Vertex AI（Vertex AIを使用する場合）
+# VERTEXAI_PROJECT=your-gcp-project-id
 # VERTEXAI_LOCATION=us-central1
+# 注: 認証には gcloud auth application-default login が必要
 ```
+
+詳細なモデル指定例は「[サポートするLLMモデル](#サポートするllmモデル)」セクションを参照してください。
 
 ## 使用方法
 
@@ -105,10 +113,10 @@ Claude Desktopを再起動すると、MCPツールが利用可能になります
 
 ```bash
 # ローカルで起動
-uv run agent-skills-mcp --transport http --host 127.0.0.1 --port 8000
+uv run agent-skills-mcp --transport http --host 127.0.0.1 --port 8080
 
 # または0.0.0.0でリッスン（外部からアクセス可能）
-uv run agent-skills-mcp --transport http --host 0.0.0.0 --port 8000
+uv run agent-skills-mcp --transport http --host 0.0.0.0 --port 8080
 ```
 
 **注意**: HTTPモードは、MCPプロトコルのstreamable-http transportを使用します。通常のREST APIではなく、MCP対応クライアントからの接続が必要です。
@@ -205,39 +213,62 @@ Detailed instructions for the LLM when this skill is loaded.
 
 ## サポートするLLMモデル
 
+LangChain経由で複数のプロバイダーに対応しています。`.env` ファイルで `DEFAULT_MODEL` を設定してください。
+
 ### Anthropic API
+
+直接Anthropic APIを使用する場合:
 
 ```bash
 # .env
 ANTHROPIC_API_KEY=sk-ant-...
+DEFAULT_MODEL=anthropic/claude-3-5-sonnet-20241022
 ```
 
 モデル指定例:
-- `anthropic/claude-3-5-sonnet-20241022`
-- `anthropic/claude-3-5-haiku-20241022`
+- `anthropic/claude-3-5-sonnet-20241022` - Claude 3.5 Sonnet
+- `anthropic/claude-3-5-haiku-20241022` - Claude 3.5 Haiku
+- `anthropic/claude-sonnet-4-5-20250929` - Claude Sonnet 4.5 (最新)
 
 ### AWS Bedrock
 
+AWS Bedrockを経由してClaudeを使用する場合:
+
 ```bash
 # .env
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
+AWS_ACCESS_KEY_ID=your-access-key-id
+AWS_SECRET_ACCESS_KEY=your-secret-access-key
 AWS_REGION_NAME=us-east-1
+DEFAULT_MODEL=bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0
 ```
 
 モデル指定例:
-- `bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0`
+- `bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0` - Claude 3.5 Sonnet
+- `bedrock/anthropic.claude-3-5-haiku-20241022-v1:0` - Claude 3.5 Haiku
+- `bedrock/us.anthropic.claude-sonnet-4-5-v1:0` - Claude Sonnet 4.5 (USリージョン)
+
+**注意**: Bedrockのモデル名はリージョンによって異なる場合があります。
 
 ### Google Vertex AI
 
+Google Cloud Vertex AIを経由してClaudeを使用する場合:
+
 ```bash
 # .env
-VERTEXAI_PROJECT=your-project-id
+VERTEXAI_PROJECT=your-gcp-project-id
 VERTEXAI_LOCATION=us-central1
+DEFAULT_MODEL=vertex_ai/claude-3-5-sonnet-v2@20241022
 ```
 
 モデル指定例:
-- `vertex_ai/claude-3-5-sonnet-v2@20241022`
+- `vertex_ai/claude-3-5-sonnet-v2@20241022` - Claude 3.5 Sonnet
+- `vertex_ai/claude-3-5-haiku@20241022` - Claude 3.5 Haiku
+- `vertex_ai/claude-sonnet-4-5@20250929` - Claude Sonnet 4.5 (最新)
+
+**注意**:
+- Vertex AIの認証にはApplication Default Credentials (ADC)を使用します
+- 初回利用時に `gcloud auth application-default login` を実行してください
+- `VERTEXAI_LOCATION` は `us-central1`、`europe-west1`、`asia-southeast1`、`global` などが利用可能です
 
 ## 開発
 
@@ -303,12 +334,12 @@ uv run pytest
 └────┬─────────────┬──────┘
      │             │
      ▼             ▼
-┌──────────┐  ┌─────────┐
-│ Skills   │  │ LiteLLM │
-│ Manager  │  │ Client  │
-└──────────┘  └────┬────┘
-     │             │
-     ▼             ▼
+┌──────────┐  ┌───────────┐
+│ Skills   │  │ LangChain │
+│ Manager  │  │  Client   │
+└──────────┘  └─────┬─────┘
+     │              │
+     ▼              ▼
 ┌──────────┐  ┌──────────────┐
 │ skills/  │  │ Anthropic    │
 │ (SKILL.md│  │ Bedrock      │
@@ -344,4 +375,4 @@ Apache-2.0
 - [Agent Skills Specification](https://agentskills.io/specification)
 - [GitHub - anthropics/skills](https://github.com/anthropics/skills)
 - [FastMCP Documentation](https://gofastmcp.com)
-- [LiteLLM Documentation](https://docs.litellm.ai)
+- [LangChain Documentation](https://python.langchain.com/)
