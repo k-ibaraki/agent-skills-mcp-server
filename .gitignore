@@ -53,3 +53,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Skills - External MCP Servers (Git管理外)
+skills/notepm-search/
