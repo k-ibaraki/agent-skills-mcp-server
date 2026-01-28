@@ -6,6 +6,7 @@ import time
 
 import litellm
 from strands import Agent
+from strands.agent.conversation_manager import SummarizingConversationManager
 from strands.models.litellm import LiteLLMModel
 
 from agent_skills_mcp.config import get_config
@@ -112,11 +113,18 @@ class LLMClient:
         # Create LiteLLM model
         llm_model = self._create_llm_model(selected_model)
 
+        # Create conversation manager with summarization to handle large contexts
+        conversation_manager = SummarizingConversationManager(
+            summary_ratio=0.3,  # Summarize 30% of messages when reducing context
+            preserve_recent_messages=10,  # Always keep the last 10 messages
+        )
+
         # Create Strands Agent with skill content as system prompt
         agent = Agent(
             model=llm_model,
             system_prompt=skill_content,
             tools=[file_read, file_write, shell, web_fetch],
+            conversation_manager=conversation_manager,
         )
 
         # Log skill execution details

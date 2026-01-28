@@ -5,19 +5,13 @@ This module provides tools for skill execution:
 - web_fetch: Custom implementation (not provided by strands-agents-tools)
 """
 
-import hashlib
 import logging
-import time
 from pathlib import Path
-from urllib.parse import urlparse
 
 import httpx
 from strands import tool
 
 logger = logging.getLogger(__name__)
-
-# Temporary directory for web_fetch content
-TEMP_DIR = Path(".tmp/web_fetch")
 
 # Allowed directories for file operations (security restriction)
 ALLOWED_DIRECTORIES = [
@@ -44,46 +38,6 @@ def _is_path_allowed(path: Path) -> bool:
     except (OSError, RuntimeError):
         # Handle cases where path cannot be resolved
         return False
-
-
-def _save_web_content_to_file(url: str, content: str, content_type: str) -> Path:
-    """Save web content to a temporary file.
-
-    Args:
-        url: Source URL of the content.
-        content: Content to save.
-        content_type: MIME type of the content.
-
-    Returns:
-        Path to the saved file.
-    """
-    # Create temp directory if it doesn't exist
-    TEMP_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Generate filename based on URL hash and timestamp
-    url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
-    timestamp = int(time.time() * 1000)  # milliseconds
-    parsed_url = urlparse(url)
-    domain = parsed_url.netloc.replace(":", "_").replace(".", "_")
-
-    # Determine file extension based on content type
-    ext = ".txt"
-    if "json" in content_type:
-        ext = ".json"
-    elif "html" in content_type:
-        ext = ".html"
-    elif "xml" in content_type:
-        ext = ".xml"
-
-    filename = f"{timestamp}_{domain}_{url_hash}{ext}"
-    filepath = TEMP_DIR / filename
-
-    # Save content to file
-    filepath.write_text(content, encoding="utf-8")
-
-    logger.info(f"Saved web content to: {filepath} (size: {len(content)} bytes)")
-
-    return filepath
 
 
 @tool
@@ -207,10 +161,10 @@ async def web_fetch(
     body: str | None = None,
     prompt: str | None = None,
 ) -> str:
-    """Fetch content from a URL and save it to a temporary file.
+    """Fetch content from a URL with optional headers, params, and body.
 
-    The content is saved to a local file to avoid context window overflow.
-    Use the file_read tool to read the content if needed.
+    Note: Large responses are automatically managed by the conversation manager
+    through summarization to prevent context window overflow.
 
     Args:
         url: URL to fetch content from.
@@ -222,7 +176,7 @@ async def web_fetch(
         prompt: Optional prompt describing what information to extract (deprecated, unused).
 
     Returns:
-        Information about the fetched content and the file path where it was saved.
+        Content from the URL or error message.
 
     Examples:
         # Simple GET request
@@ -285,25 +239,25 @@ async def web_fetch(
             # Get content type
             content_type = response.headers.get("content-type", "")
 
-            # Extract content based on type
-            if "text/html" in content_type or "application/json" in content_type or "text/" in content_type:
+            # For HTML, return text content with size limit
+            if "text/html" in content_type:
                 content = response.text
+                # Limit content size to prevent excessive memory usage
+                if len(content) > 100000:
+                    content = content[:100000] + "\n... (content truncated at 100KB)"
+                return content
+            elif "application/json" in content_type:
+                content = response.text
+                if len(content) > 100000:
+                    content = content[:100000] + "\n... (content truncated at 100KB)"
+                return content
+            elif "text/" in content_type:
+                content = response.text
+                if len(content) > 100000:
+                    content = content[:100000] + "\n... (content truncated at 100KB)"
+                return content
             else:
-                # For binary content, save raw bytes
-                content = response.content.decode("utf-8", errors="ignore")
-
-            # Save content to temporary file
-            filepath = _save_web_content_to_file(url, content, content_type)
-
-            # Return metadata and file path
-            return f"""Content fetched successfully from: {url}
-
-File saved to: {filepath.absolute()}
-Content type: {content_type}
-Content size: {len(content):,} bytes ({len(content) / 1024:.1f} KB)
-
-Use the file_read tool to read the content:
-  file_read("{filepath.absolute()}")"""
+                return f"Content type {content_type} received. Size: {len(response.content)} bytes"
 
     except httpx.TimeoutException:
         return f"Error: Request to {url} timed out"
