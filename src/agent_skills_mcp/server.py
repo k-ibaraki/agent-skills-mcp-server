@@ -45,16 +45,8 @@ async def skills_search(
     """Search for Agent Skills by description or name.
 
     Args:
-        query: Search query to match against skill descriptions (partial match, case-insensitive).
-        name_filter: Filter by skill name prefix (case-insensitive).
-
-    Returns:
-        List of matching skills with name, description, and metadata.
-
-    Examples:
-        - skills_search(query="pdf") - Find skills related to PDF processing
-        - skills_search(name_filter="example") - Find skills starting with "example"
-        - skills_search(query="data", name_filter="etl") - Combine both filters
+        query: Search query for skill descriptions (partial match).
+        name_filter: Filter by skill name prefix.
     """
     results = skills_manager.search_skills(query=query, name_filter=name_filter)
 
@@ -66,18 +58,11 @@ async def skills_execute(
     skill_name: str,
     user_prompt: str,
 ) -> dict:
-    """Execute an Agent Skill by injecting it into an LLM as system prompt.
+    """Execute an Agent Skill with the LLM.
 
     Args:
         skill_name: Name of the skill to execute.
-        user_prompt: User's prompt/request to send to the LLM.
-
-    Returns:
-        Execution result including LLM response, model used, token usage, and execution time.
-
-    Raises:
-        ValueError: If skill not found or model credentials not configured.
-        Exception: If LLM API call fails.
+        user_prompt: User's request to process with the skill.
     """
     # Load skill
     skill = skills_manager.load_skill(skill_name)
@@ -102,18 +87,15 @@ async def skills_execute(
 @app.command()
 def main(
     transport: str = typer.Option(
-        "stdio",
-        "--transport",
+        default="stdio",
         help="Transport protocol to use ('stdio' or 'http')",
     ),
     host: str = typer.Option(
-        "127.0.0.1",
-        "--host",
+        default="127.0.0.1",
         help="Host for HTTP server (http mode only)",
     ),
     port: int = typer.Option(
-        8000,
-        "--port",
+        default=8080,
         help="Port for HTTP server (http mode only)",
     ),
 ):

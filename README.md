@@ -5,7 +5,7 @@ MCP (Model Context Protocol) サーバーを使って Agent Skills を管理・�
 ## 特徴
 
 - **2つのMCPツール**: スキル検索と実行機能を提供
-- **マルチプロバイダー対応**: Anthropic API、AWS Bedrock、Google Vertex AI に対応（LangChain経由）
+- **マルチプロバイダー対応**: Anthropic API、AWS Bedrock、Google Vertex AI に対応（Strands Agents + LiteLLM経由）
 - **Transport柔軟性**: STDIO（Claude Desktop統合）とHTTPの両方をサポート
 - **型安全**: Pydanticによる完全な型チェックとバリデーション
 - **Agent Skills仕様準拠**: Anthropic公式仕様に準拠したスキル管理
@@ -162,6 +162,39 @@ docker compose down
 
 **注意**: 使用するモデルはサーバーの環境変数`DEFAULT_MODEL`で設定します。
 
+## スキル実行で使用可能なツール
+
+`skills-execute` で実行されるスキル内から、以下のツールを使用できます：
+
+### 1. `file_read`
+ファイルの内容を読み込みます。
+
+```markdown
+# SKILL.md 内での使用例
+file_read を使ってファイルを読み込んでください。
+```
+
+### 2. `file_write`
+ファイルに内容を書き込みます。親ディレクトリが存在しない場合は自動的に作成されます。
+
+### 3. `shell`
+シェルコマンドを実行します（30秒タイムアウト）。
+
+```markdown
+# SKILL.md 内での使用例
+shell コマンドで `curl` を使ってデータを取得できます。
+```
+
+### 4. `web_fetch`
+URLからコンテンツを取得します（非同期、50000文字制限、30秒タイムアウト）。
+
+```markdown
+# SKILL.md 内での使用例
+web_fetch を使って https://example.com からデータを取得してください。
+```
+
+**重要**: これらのツールはスキルの指示（SKILL.md）内で自然言語で指示することで、Strands Agents が自動的に呼び出します。特殊なタグは不要です。
+
 ## スキルの作成
 
 スキルは `skills/` ディレクトリ内に配置します。
@@ -213,7 +246,7 @@ Detailed instructions for the LLM when this skill is loaded.
 
 ## サポートするLLMモデル
 
-LangChain経由で複数のプロバイダーに対応しています。`.env` ファイルで `DEFAULT_MODEL` を設定してください。
+Strands Agents + LiteLLM 経由で複数のプロバイダーに対応しています。`.env` ファイルで `DEFAULT_MODEL` を設定してください。
 
 ### Anthropic API
 
@@ -334,10 +367,11 @@ uv run pytest
 └────┬─────────────┬──────┘
      │             │
      ▼             ▼
-┌──────────┐  ┌───────────┐
-│ Skills   │  │ LangChain │
-│ Manager  │  │  Client   │
-└──────────┘  └─────┬─────┘
+┌──────────┐  ┌───────────────┐
+│ Skills   │  │ Strands       │
+│ Manager  │  │ Agents        │
+└──────────┘  │ + LiteLLM     │
+              └─────┬─────────┘
      │              │
      ▼              ▼
 ┌──────────┐  ┌──────────────┐
@@ -375,4 +409,5 @@ Apache-2.0
 - [Agent Skills Specification](https://agentskills.io/specification)
 - [GitHub - anthropics/skills](https://github.com/anthropics/skills)
 - [FastMCP Documentation](https://gofastmcp.com)
-- [LangChain Documentation](https://python.langchain.com/)
+- [Strands Agents Documentation](https://strandsagents.com/)
+- [LiteLLM Documentation](https://docs.litellm.ai/)

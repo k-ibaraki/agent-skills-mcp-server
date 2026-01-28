@@ -8,7 +8,7 @@ Agent Skills を MCP サーバー経由で管理・実行するシステムで�
 
 **技術スタック**:
 - **MCP**: FastMCP (stdio/HTTP 両対応)
-- **LLM**: LangChain (Bedrock、Vertex AI、Anthropic API 対応)
+- **LLM**: Strands Agents + LiteLLM (Anthropic API、AWS Bedrock、Google Vertex AI 対応)
 - **Agent Skills**: Anthropic 公式仕様準拠
 - **Python**: 3.13+
 
@@ -16,6 +16,17 @@ Agent Skills を MCP サーバー経由で管理・実行するシステムで�
 
 1. **skills-search**: スキル検索 (name/description で検索、メタデータ含む)
 2. **skills-execute**: スキル実行 (LLM にスキルコンテキスト注入して実行)
+
+## Agent Skills で使用可能なツール
+
+スキル内から以下のツールを使用できます：
+
+1. **file_read**: ファイル読み込み
+2. **file_write**: ファイル書き込み
+3. **shell**: シェルコマンド実行（30秒タイムアウト）
+4. **web_fetch**: URL取得（非同期、50000文字制限）
+
+これらのツールは Strands Agents のエージェントループで自動的に呼び出されます。
 
 ## コーディングガイドライン
 
@@ -223,5 +234,6 @@ mypy または pyright を使用した型チェックを検討。
 
 - [Agent Skills Specification](https://agentskills.io/specification)
 - [FastMCP Documentation](https://gofastmcp.com)
-- [LangChain Documentation](https://python.langchain.com/)
+- [Strands Agents Documentation](https://strandsagents.com/)
+- [LiteLLM Documentation](https://docs.litellm.ai/)
 - [Pydantic Documentation](https://docs.pydantic.dev)
