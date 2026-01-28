@@ -204,17 +204,26 @@ async def web_fetch(
     import re
 
     try:
+        # Debug logging
+        logger.debug(f"web_fetch called with url={url}, headers={headers}")
+
         # Expand environment variables in headers
         expanded_headers = {}
         if headers:
             for key, value in headers.items():
+                # Clean up header key and value (remove extra quotes if present)
+                clean_key = str(key).strip().strip('"').strip("'")
+                clean_value = str(value).strip()
+
                 # Replace ${VAR_NAME} with environment variable value
                 expanded_value = re.sub(
                     r"\$\{([^}]+)\}",
                     lambda m: os.getenv(m.group(1), m.group(0)),
-                    value,
+                    clean_value,
                 )
-                expanded_headers[key] = expanded_value
+                expanded_headers[clean_key] = expanded_value
+
+        logger.debug(f"Expanded headers: {expanded_headers}")
 
         # Prepare request kwargs
         request_kwargs = {

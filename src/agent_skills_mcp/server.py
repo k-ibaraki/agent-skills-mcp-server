@@ -1,14 +1,22 @@
 """FastMCP server providing Agent Skills management and execution tools."""
 
 import logging
+import os
 import sys
+from pathlib import Path
 
 import typer
+from dotenv import load_dotenv
 from fastmcp import FastMCP
 
 from agent_skills_mcp.config import get_config
 from agent_skills_mcp.llm_client import LLMClient
 from agent_skills_mcp.skills_manager import SkillsManager
+
+# Load .env file to ensure all environment variables (including skill-specific ones) are available
+env_file = Path(".env")
+if env_file.exists():
+    load_dotenv(env_file)
 
 # Typer app
 app = typer.Typer()

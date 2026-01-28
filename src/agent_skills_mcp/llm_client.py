@@ -41,6 +41,9 @@ class LLMClient:
             logging.getLogger("LiteLLM").setLevel(logging.WARNING)
             logging.getLogger("LiteLLM Router").setLevel(logging.WARNING)
             logging.getLogger("LiteLLM Proxy").setLevel(logging.WARNING)
+            # Also suppress Strands Agents internal loggers
+            logging.getLogger("strands").setLevel(logging.WARNING)
+            logging.getLogger("strands.agent").setLevel(logging.WARNING)
 
     def _create_llm_model(self, model_string: str) -> LiteLLMModel:
         """Create LiteLLM model instance based on provider prefix.
@@ -120,11 +123,13 @@ class LLMClient:
         )
 
         # Create Strands Agent with skill content as system prompt
+        # Set callback_handler=None to suppress intermediate output (tool calls, thinking, etc.)
         agent = Agent(
             model=llm_model,
             system_prompt=skill_content,
             tools=[file_read, file_write, shell, web_fetch],
             conversation_manager=conversation_manager,
+            callback_handler=None,
         )
 
         # Log skill execution details
