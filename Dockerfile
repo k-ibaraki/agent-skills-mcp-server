@@ -4,7 +4,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=".:$PYTHONPATH"
 ENV TZ=Asia/Tokyo
-ENV PORT=8000
+ENV PORT=8080
 
 WORKDIR /app
 
@@ -16,6 +16,6 @@ COPY src/ ./src/
 COPY scripts/ ./scripts/
 COPY skills/ ./skills/
 
-EXPOSE ${PORT:-8000}
+EXPOSE ${PORT:-8080}
 
-ENTRYPOINT ["sh", "-c", "uv run agent-skills-mcp --transport http --host 0.0.0.0 --port ${PORT:-8000}"]
+ENTRYPOINT ["sh", "-c", "uv run agent-skills-mcp --transport http --host 0.0.0.0 --port ${PORT:-8080}"]
