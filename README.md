@@ -65,6 +65,8 @@ cp .env.example .env
 DEFAULT_MODEL=anthropic/claude-3-5-sonnet-20241022
 # DEFAULT_MODEL=bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0
 # DEFAULT_MODEL=vertex_ai/claude-3-5-sonnet-v2@20241022
+# DEFAULT_MODEL=vertex_ai/gemini-3-flash-preview  # Gemini 3 (最新プレビュー)
+# DEFAULT_MODEL=vertex_ai/gemini-2.5-pro  # Gemini via Vertex AI
 
 # Anthropic API（直接APIを使用する場合）
 ANTHROPIC_API_KEY=sk-ant-your-api-key-here
@@ -74,7 +76,7 @@ ANTHROPIC_API_KEY=sk-ant-your-api-key-here
 # AWS_SECRET_ACCESS_KEY=your-secret-access-key
 # AWS_REGION_NAME=us-east-1
 
-# Google Vertex AI（Vertex AIを使用する場合）
+# Google Vertex AI（ClaudeまたはGeminiを使用する場合）
 # VERTEXAI_PROJECT=your-gcp-project-id
 # VERTEXAI_LOCATION=us-central1
 # 注: 認証には gcloud auth application-default login が必要

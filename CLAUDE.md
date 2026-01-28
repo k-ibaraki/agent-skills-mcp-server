@@ -146,9 +146,15 @@ Instructions for the LLM...
 - **AWS Bedrock**:
   - `bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0`
   - `bedrock/us.anthropic.claude-sonnet-4-5-v1:0` (最新)
-- **Google Vertex AI**:
+- **Google Vertex AI (Claude)**:
   - `vertex_ai/claude-3-5-sonnet-v2@20241022`
   - `vertex_ai/claude-sonnet-4-5@20250929` (最新)
+- **Google Vertex AI (Gemini)**:
+  - `vertex_ai/gemini-3-flash-preview` (最新プレビュー)
+  - `vertex_ai/gemini-2.5-pro`
+  - `vertex_ai/gemini-2.0-flash-exp`
+  - `vertex_ai/gemini-1.5-pro`
+  - `vertex_ai/gemini-1.5-flash`
 
 認証情報は環境変数で管理 (.env ファイル)。詳細は `.env.example` を参照。
 
