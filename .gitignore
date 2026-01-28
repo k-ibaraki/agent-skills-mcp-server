@@ -54,5 +54,8 @@ Thumbs.db
 # Logs
 *.log
 
+# Temporary files from web_fetch
+.tmp/
+
 # Skills - External MCP Servers (Git管理外)
 skills/notepm-search/

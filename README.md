@@ -56,6 +56,11 @@ cp .env.example .env
 `.env` ファイルを編集してAPIキーとデフォルトモデルを設定：
 
 ```bash
+# ログレベル（オプション）
+# INFO: 最小限の実行履歴のみ（デフォルト）
+# DEBUG: 詳細なログ（LLMレスポンス全文含む）
+# LOG_LEVEL=INFO
+
 # デフォルトLLMモデル（以下のいずれかを選択）
 DEFAULT_MODEL=anthropic/claude-3-5-sonnet-20241022
 # DEFAULT_MODEL=bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0

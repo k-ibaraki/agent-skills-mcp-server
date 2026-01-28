@@ -58,6 +58,12 @@ class Config(BaseSettings):
         description="Google Cloud location for Vertex AI",
     )
 
+    # Logging configuration
+    log_level: str = Field(
+        default="INFO",
+        description="Logging level (DEBUG, INFO, WARNING, ERROR)",
+    )
+
     def validate_llm_config(self, model: str) -> None:
         """Validate that required credentials are available for the specified model.
 

@@ -4,6 +4,7 @@ import asyncio
 import logging
 import time
 
+import litellm
 from strands import Agent
 from strands.models.litellm import LiteLLMModel
 
@@ -25,6 +26,20 @@ class LLMClient:
         """
         self.config = get_config()
         self.default_model = default_model or self.config.default_model
+
+        # Configure LiteLLM logging based on log level
+        # In DEBUG mode, show all LiteLLM logs
+        # In INFO mode (default), suppress verbose LiteLLM output
+        if self.config.log_level.upper() == "DEBUG":
+            litellm.set_verbose = True
+            litellm.suppress_debug_info = False
+        else:
+            litellm.set_verbose = False
+            litellm.suppress_debug_info = True
+            # Also control LiteLLM's internal logger
+            logging.getLogger("LiteLLM").setLevel(logging.WARNING)
+            logging.getLogger("LiteLLM Router").setLevel(logging.WARNING)
+            logging.getLogger("LiteLLM Proxy").setLevel(logging.WARNING)
 
     def _create_llm_model(self, model_string: str) -> LiteLLMModel:
         """Create LiteLLM model instance based on provider prefix.
@@ -105,10 +120,9 @@ class LLMClient:
         )
 
         # Log skill execution details
-        logger.info("=" * 80)
-        logger.info(f"Executing skill: {skill_name}")
-        logger.info(f"Model: {selected_model}")
-        logger.info("-" * 80)
+        logger.debug("=" * 80)
+        logger.info(f"Executing skill: {skill_name} (Model: {selected_model})")
+        logger.debug("-" * 80)
 
         # Execute agent with timing
         start_time = time.time()
@@ -148,21 +162,20 @@ class LLMClient:
 
         except Exception as e:
             logger.error(f"LLM API call failed: {e}")
-            logger.info("=" * 80)
+            logger.debug("=" * 80)
             raise Exception(f"LLM API call failed: {e}") from e
 
         execution_time = time.time() - start_time
 
-        # Log response details
-        logger.info("LLM Response:")
-        logger.info(response_content)
-        logger.info("-" * 80)
+        # Log response summary (INFO) and details (DEBUG)
         logger.info(
-            f"Execution completed: {execution_time:.2f}s | "
-            f"Input tokens: {total_input_tokens} | "
-            f"Output tokens: {total_output_tokens}"
+            f"Completed: {execution_time:.2f}s | "
+            f"Tokens (in/out): {total_input_tokens}/{total_output_tokens}"
         )
-        logger.info("=" * 80)
+        logger.debug("-" * 80)
+        logger.debug("LLM Response:")
+        logger.debug(response_content)
+        logger.debug("=" * 80)
 
         return SkillExecutionResult(
             skill_name=skill_name,

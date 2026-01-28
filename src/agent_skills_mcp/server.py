@@ -2,10 +2,13 @@
 
 import logging
 import sys
+import time
+from pathlib import Path
 
 import typer
 from fastmcp import FastMCP
 
+from agent_skills_mcp.config import get_config
 from agent_skills_mcp.llm_client import LLMClient
 from agent_skills_mcp.skills_manager import SkillsManager
 
@@ -13,14 +16,46 @@ from agent_skills_mcp.skills_manager import SkillsManager
 app = typer.Typer()
 
 
+def cleanup_temp_files(max_age_hours: int = 24):
+    """Clean up temporary files older than max_age_hours.
+
+    Args:
+        max_age_hours: Maximum age in hours before files are deleted.
+    """
+    temp_dir = Path(".tmp/web_fetch")
+    if not temp_dir.exists():
+        return
+
+    current_time = time.time()
+    max_age_seconds = max_age_hours * 3600
+    deleted_count = 0
+
+    for file_path in temp_dir.glob("*"):
+        if file_path.is_file():
+            file_age = current_time - file_path.stat().st_mtime
+            if file_age > max_age_seconds:
+                try:
+                    file_path.unlink()
+                    deleted_count += 1
+                except Exception as e:
+                    logging.warning(f"Failed to delete temp file {file_path}: {e}")
+
+    if deleted_count > 0:
+        logging.info(f"Cleaned up {deleted_count} temporary file(s) older than {max_age_hours} hours")
+
+
 def setup_logging():
     """
     Configure logging to output to stderr.
     This prevents stdout pollution for stdio transport.
+    Log level can be controlled via LOG_LEVEL environment variable.
     """
+    config = get_config()
+    log_level = getattr(logging, config.log_level.upper(), logging.INFO)
+
     log_formatter = logging.Formatter("%(asctime)s [%(levelname)s] - %(message)s")
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(log_level)
 
     root_logger.handlers.clear()
 
@@ -103,6 +138,9 @@ def main(
     Start the MCP server with stdio or http transport.
     """
     setup_logging()
+
+    # Clean up old temporary files (older than 24 hours)
+    cleanup_temp_files(max_age_hours=24)
 
     if transport == "stdio":
         logging.info("Starting MCP server with stdio transport...")
