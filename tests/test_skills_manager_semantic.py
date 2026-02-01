@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_skills_mcp.skills_manager import SkillsManager
+from agent_skills_mcp.skills_manager import SkillSearchResult, SkillsManager
 from agent_skills_mcp.vector_store import VectorStore
 
 
@@ -91,7 +91,10 @@ class TestSemanticSearchIntegration:
         """Semantic search should find weather skill with English query."""
         results = skills_manager_with_vector_store.search_skills(query="weather")
         assert len(results) > 0
-        assert results[0].name == "weather-forecast"
+        assert all(isinstance(r, SkillSearchResult) for r in results)
+        assert results[0].skill.name == "weather-forecast"
+        assert results[0].score is not None
+        assert results[0].score > 0
 
     @pytest.mark.integration
     def test_semantic_search_weather_japanese(
@@ -100,7 +103,8 @@ class TestSemanticSearchIntegration:
         """Semantic search should find weather skill with Japanese query."""
         results = skills_manager_with_vector_store.search_skills(query="天気予報")
         assert len(results) > 0
-        assert results[0].name == "weather-forecast"
+        assert results[0].skill.name == "weather-forecast"
+        assert results[0].score is not None
 
     @pytest.mark.integration
     def test_semantic_search_document_japanese(
@@ -111,7 +115,8 @@ class TestSemanticSearchIntegration:
             query="ドキュメント検索"
         )
         assert len(results) > 0
-        assert results[0].name == "notepm-search"
+        assert results[0].skill.name == "notepm-search"
+        assert results[0].score is not None
 
     @pytest.mark.integration
     def test_semantic_search_code_related(
@@ -120,7 +125,7 @@ class TestSemanticSearchIntegration:
         """Semantic search should find code-related skills."""
         results = skills_manager_with_vector_store.search_skills(query="review my code")
         assert len(results) > 0
-        assert results[0].name == "code-review"
+        assert results[0].skill.name == "code-review"
 
     @pytest.mark.integration
     def test_semantic_search_respects_limit(
@@ -139,7 +144,7 @@ class TestSemanticSearchIntegration:
             query="text processing", name_filter="translate"
         )
         assert len(results) > 0
-        assert all(r.name.startswith("translate") for r in results)
+        assert all(r.skill.name.startswith("translate") for r in results)
 
     @pytest.mark.integration
     def test_search_without_query_returns_all(
@@ -148,6 +153,29 @@ class TestSemanticSearchIntegration:
         """Search without query should return all skills (keyword search)."""
         results = skills_manager_with_vector_store.search_skills()
         assert len(results) == 5
+        # Keyword search returns None for score
+        assert all(r.score is None for r in results)
+
+    @pytest.mark.integration
+    def test_semantic_search_results_have_scores(
+        self, skills_manager_with_vector_store: SkillsManager
+    ):
+        """Semantic search results should have relevance scores."""
+        results = skills_manager_with_vector_store.search_skills(query="weather")
+        assert len(results) > 0
+        for result in results:
+            assert result.score is not None
+            assert 0.0 <= result.score <= 1.0
+
+    @pytest.mark.integration
+    def test_semantic_search_scores_are_sorted(
+        self, skills_manager_with_vector_store: SkillsManager
+    ):
+        """Semantic search results should be sorted by score descending."""
+        results = skills_manager_with_vector_store.search_skills(query="text")
+        if len(results) > 1:
+            scores = [r.score for r in results]
+            assert scores == sorted(scores, reverse=True)
 
 
 class TestKeywordSearchFallback:
@@ -160,7 +188,9 @@ class TestKeywordSearchFallback:
         """Search should work without vector store (keyword search)."""
         results = skills_manager_without_vector_store.search_skills(query="weather")
         assert len(results) >= 1
-        assert any(r.name == "weather-forecast" for r in results)
+        assert any(r.skill.name == "weather-forecast" for r in results)
+        # Keyword search returns None for score
+        assert all(r.score is None for r in results)
 
     @pytest.mark.unit
     def test_keyword_search_with_name_filter(
@@ -169,7 +199,7 @@ class TestKeywordSearchFallback:
         """Keyword search should work with name filter."""
         results = skills_manager_without_vector_store.search_skills(name_filter="code")
         assert len(results) == 1
-        assert results[0].name == "code-review"
+        assert results[0].skill.name == "code-review"
 
 
 class TestRefreshIndex:
@@ -197,5 +227,23 @@ class TestRefreshIndex:
 
         # Search should find the new skill
         results = skills_manager_with_vector_store.search_skills(query="weather")
-        skill_names = [r.name for r in results]
+        skill_names = [r.skill.name for r in results]
         assert "new-weather-app" in skill_names
+
+
+class TestThresholdFiltering:
+    """Tests for similarity threshold filtering."""
+
+    @pytest.mark.integration
+    def test_threshold_filters_low_relevance(
+        self, skills_manager_with_vector_store: SkillsManager
+    ):
+        """Results below threshold should be filtered out."""
+        # Search for something very specific - low relevance results should be excluded
+        results = skills_manager_with_vector_store.search_skills(
+            query="weather forecast location"
+        )
+        # All results should have score above threshold (default 0.3)
+        for result in results:
+            if result.score is not None:
+                assert result.score >= 0.3

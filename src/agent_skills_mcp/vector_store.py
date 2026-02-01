@@ -122,16 +122,20 @@ class VectorStore:
             return False
 
     def search(
-        self, query: str, limit: int | None = None
+        self,
+        query: str,
+        limit: int | None = None,
+        threshold: float | None = None,
     ) -> list[SemanticSearchResult]:
         """Perform semantic search for skills.
 
         Args:
             query: Search query string.
             limit: Maximum number of results to return.
+            threshold: Minimum similarity score (0-1). Results below this are excluded.
 
         Returns:
-            List of SemanticSearchResult sorted by relevance.
+            List of SemanticSearchResult sorted by relevance, filtered by threshold.
 
         Raises:
             RuntimeError: If vector store is not initialized.
@@ -141,15 +145,20 @@ class VectorStore:
 
         if limit is None:
             limit = self._config.semantic_search_limit
+        if threshold is None:
+            threshold = self._config.semantic_search_threshold
 
         try:
             # Return empty if no skills indexed
             if not self._skills_map:
                 return []
 
+            # Query more results than needed to account for threshold filtering
+            query_limit = min(limit * 2, len(self._skills_map))
+
             results = self._collection.query(
                 query_texts=[query],
-                n_results=min(limit, len(self._skills_map)),
+                n_results=query_limit,
                 include=["distances", "metadatas"],
             )
 
@@ -166,6 +175,10 @@ class VectorStore:
                     distance = distances[i] if i < len(distances) else 1.0
                     score = 1.0 - distance
 
+                    # Apply threshold filter
+                    if score < threshold:
+                        continue
+
                     search_results.append(
                         SemanticSearchResult(
                             skill_name=skill_name,
@@ -175,7 +188,7 @@ class VectorStore:
                     )
 
             search_results.sort(key=lambda r: r.score, reverse=True)
-            return search_results
+            return search_results[:limit]
 
         except Exception as e:
             logger.error(f"Semantic search failed: {e}")

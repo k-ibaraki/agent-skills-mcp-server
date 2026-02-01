@@ -42,16 +42,31 @@ def setup_logging():
     root_logger.addHandler(stream_handler)
 
 
+def initialize_semantic_search():
+    """Initialize vector store and build index at startup."""
+    config = get_config()
+
+    if not config.semantic_search_enabled:
+        logging.info("Semantic search is disabled")
+        return
+
+    logging.info("Initializing semantic search...")
+    vector_store = VectorStore()
+    skills_manager.set_vector_store(vector_store)
+
+    # Initialize immediately to avoid delay on first search
+    if skills_manager.initialize_vector_store():
+        logging.info("Semantic search initialized successfully")
+    else:
+        logging.warning("Failed to initialize semantic search, will use keyword search")
+
+
 # Initialize FastMCP server
 mcp = FastMCP("agent-skills-mcp-server")
 
 # Initialize managers
 skills_manager = SkillsManager()
 llm_client = LLMClient()
-
-# Initialize vector store (lazy initialization - model loads on first search)
-vector_store = VectorStore()
-skills_manager.set_vector_store(vector_store)
 
 
 @mcp.tool()
@@ -63,17 +78,27 @@ async def skills_search(
     """Search for Agent Skills by description or name.
 
     Uses semantic search for better relevance matching.
+    Results are filtered by similarity threshold and include relevance scores.
 
     Args:
         query: Search query for skill descriptions (semantic search).
         name_filter: Filter by skill name prefix.
         limit: Maximum number of results to return (default: 10).
+
+    Returns:
+        List of matching skills with metadata and relevance score.
     """
     results = skills_manager.search_skills(
         query=query, name_filter=name_filter, limit=limit
     )
 
-    return [skill.frontmatter.model_dump(exclude_none=True) for skill in results]
+    return [
+        {
+            **result.skill.frontmatter.model_dump(exclude_none=True),
+            "score": round(result.score, 3) if result.score is not None else None,
+        }
+        for result in results
+    ]
 
 
 @mcp.tool()
@@ -126,6 +151,9 @@ def main(
     Start the MCP server with stdio or http transport.
     """
     setup_logging()
+
+    # Initialize semantic search at startup (before starting MCP server)
+    initialize_semantic_search()
 
     if transport == "stdio":
         logging.info("Starting MCP server with stdio transport...")

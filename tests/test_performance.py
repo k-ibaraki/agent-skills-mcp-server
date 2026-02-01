@@ -133,7 +133,8 @@ class TestVectorStorePerformance:
         latencies = []
         for query in queries:
             start_time = time.perf_counter()
-            results = vector_store.search(query, limit=10)
+            # Use threshold=0 to ensure results are returned
+            results = vector_store.search(query, limit=10, threshold=0.0)
             elapsed_time = time.perf_counter() - start_time
             latencies.append(elapsed_time)
             assert len(results) > 0

@@ -158,6 +158,7 @@ docker compose down
 **レスポンス**:
 - `name`: スキル名
 - `description`: スキルの説明
+- `score`: 類似度スコア (0-1)。しきい値未満の結果は自動除外
 - `license`: ライセンス（存在する場合）
 - `metadata`: 追加メタデータ（author、versionなど）
 
@@ -165,6 +166,11 @@ docker compose down
 - `query="天気予報"` → `weather-forecast` スキルが上位にヒット
 - `query="ドキュメント検索"` → `notepm-search` スキルが上位にヒット
 - `query="code review"` → `code-review` スキルが上位にヒット
+
+**設定** (`.env`):
+```bash
+SEMANTIC_SEARCH_THRESHOLD=0.3  # 最小類似度しきい値（デフォルト: 0.3）
+```
 
 ### 2. `skills-execute`
 

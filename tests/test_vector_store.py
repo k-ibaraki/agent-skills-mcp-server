@@ -180,6 +180,47 @@ class TestVectorStoreRebuild:
         assert vector_store.skill_count == 0
 
 
+class TestThresholdFiltering:
+    """Tests for similarity threshold filtering."""
+
+    @pytest.mark.unit
+    def test_search_respects_threshold(
+        self, vector_store: VectorStore, sample_skills: list[Skill]
+    ):
+        """Search should filter out results below threshold."""
+        vector_store.initialize(sample_skills)
+        # Use a high threshold
+        results = vector_store.search("weather", threshold=0.5)
+
+        # All returned results should be above threshold
+        for result in results:
+            assert result.score >= 0.5
+
+    @pytest.mark.unit
+    def test_search_with_zero_threshold(
+        self, vector_store: VectorStore, sample_skills: list[Skill]
+    ):
+        """Search with zero threshold should return all results up to limit."""
+        vector_store.initialize(sample_skills)
+        results = vector_store.search("something", threshold=0.0, limit=10)
+
+        # Should return results even with low scores
+        assert len(results) > 0
+
+    @pytest.mark.unit
+    def test_search_with_high_threshold_may_return_empty(
+        self, vector_store: VectorStore, sample_skills: list[Skill]
+    ):
+        """Search with very high threshold may return empty results."""
+        vector_store.initialize(sample_skills)
+        # Use threshold of 1.0 (perfect match only)
+        results = vector_store.search("random unrelated query xyz", threshold=0.99)
+
+        # May return empty or very few results
+        for result in results:
+            assert result.score >= 0.99
+
+
 class TestSemanticSearchResult:
     """Tests for SemanticSearchResult dataclass."""
 

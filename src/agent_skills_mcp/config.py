@@ -79,6 +79,12 @@ class Config(BaseSettings):
         default=True,
         description="Enable semantic search (falls back to keyword search if disabled or on error)",
     )
+    semantic_search_threshold: float = Field(
+        default=0.3,
+        description="Minimum similarity score (0-1) for semantic search results",
+        ge=0.0,
+        le=1.0,
+    )
 
     def validate_llm_config(self, model: str) -> None:
         """Validate that required credentials are available for the specified model.

@@ -2,6 +2,7 @@
 
 import logging
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
@@ -11,6 +12,14 @@ from agent_skills_mcp.config import get_config
 from agent_skills_mcp.models import Skill, SkillFrontmatter
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SkillSearchResult:
+    """Result of a skill search with relevance score."""
+
+    skill: Skill
+    score: float | None  # None for keyword search results
 
 
 class SkillsManager:
@@ -46,11 +55,13 @@ class SkillsManager:
         self._vector_store = vector_store
         self._vector_store_initialized = False
 
-    def _ensure_vector_store_initialized(self) -> bool:
-        """Ensure vector store is initialized with current skills.
+    def initialize_vector_store(self) -> bool:
+        """Initialize the vector store with current skills.
+
+        Call this at startup to avoid initialization delay on first search.
 
         Returns:
-            True if vector store is ready, False otherwise.
+            True if initialization was successful, False otherwise.
         """
         if not self._vector_store:
             return False
@@ -62,11 +73,20 @@ class SkillsManager:
             all_skills = self._load_all_skills()
             if self._vector_store.initialize(all_skills):
                 self._vector_store_initialized = True
+                logger.info(f"Vector store initialized with {len(all_skills)} skills")
                 return True
             return False
         except Exception as e:
             logger.warning(f"Failed to initialize vector store: {e}")
             return False
+
+    def _ensure_vector_store_initialized(self) -> bool:
+        """Ensure vector store is initialized with current skills.
+
+        Returns:
+            True if vector store is ready, False otherwise.
+        """
+        return self.initialize_vector_store()
 
     def load_skill(self, skill_name: str) -> Skill:
         """Load complete skill content by name.
@@ -96,7 +116,7 @@ class SkillsManager:
         query: str | None = None,
         name_filter: str | None = None,
         limit: int | None = None,
-    ) -> list[Skill]:
+    ) -> list[SkillSearchResult]:
         """Search for skills by query and/or name filter.
 
         Uses semantic search when available, falls back to keyword search.
@@ -107,7 +127,7 @@ class SkillsManager:
             limit: Maximum number of results (default from config).
 
         Returns:
-            List of matching Skill objects.
+            List of SkillSearchResult with skill and relevance score.
         """
         if limit is None:
             limit = self.config.semantic_search_limit
@@ -132,7 +152,7 @@ class SkillsManager:
         query: str,
         name_filter: str | None,
         limit: int,
-    ) -> list[Skill]:
+    ) -> list[SkillSearchResult]:
         """Perform semantic search using vector store.
 
         Args:
@@ -141,7 +161,7 @@ class SkillsManager:
             limit: Maximum number of results.
 
         Returns:
-            List of matching Skill objects.
+            List of SkillSearchResult with skill and relevance score.
         """
         # Get more results than needed if we need to filter by name
         search_limit = limit * 3 if name_filter else limit
@@ -155,15 +175,17 @@ class SkillsManager:
                 r for r in results if r.skill_name.lower().startswith(name_filter_lower)
             ]
 
-        # Return skills, respecting limit
-        return [r.skill for r in results[:limit]]
+        # Return results with scores
+        return [
+            SkillSearchResult(skill=r.skill, score=r.score) for r in results[:limit]
+        ]
 
     def _keyword_search(
         self,
         query: str | None,
         name_filter: str | None,
         limit: int,
-    ) -> list[Skill]:
+    ) -> list[SkillSearchResult]:
         """Perform keyword-based search (fallback).
 
         Args:
@@ -172,7 +194,7 @@ class SkillsManager:
             limit: Maximum number of results.
 
         Returns:
-            List of matching Skill objects.
+            List of SkillSearchResult with None score (keyword search).
         """
         all_skills = self._load_all_skills()
         filtered_skills = all_skills
@@ -194,7 +216,10 @@ class SkillsManager:
                 or query_lower in skill.name.lower()
             ]
 
-        return filtered_skills[:limit]
+        return [
+            SkillSearchResult(skill=skill, score=None)
+            for skill in filtered_skills[:limit]
+        ]
 
     def _load_all_skills(self) -> list[Skill]:
         """Load all valid skills from the skills directory.
