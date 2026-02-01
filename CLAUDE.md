@@ -10,12 +10,41 @@ Agent Skills を MCP サーバー経由で管理・実行するシステムで�
 - **MCP**: FastMCP (stdio/HTTP 両対応)
 - **LLM**: Strands Agents + LiteLLM (Anthropic API、AWS Bedrock、Google Vertex AI 対応)
 - **Agent Skills**: Anthropic 公式仕様準拠
+- **セマンティック検索**: ChromaDB + sentence-transformers
 - **Python**: 3.13+
 
 ## 提供する MCP ツール
 
-1. **skills-search**: スキル検索 (name/description で検索、メタデータ含む)
+1. **skills-search**: スキル検索 (セマンティック検索対応、name/description で検索、メタデータ含む)
 2. **skills-execute**: スキル実行 (LLM にスキルコンテキスト注入して実行)
+
+### セマンティック検索 (RAG)
+
+`skills-search` はセマンティック検索を使用してスキルを検索します。
+
+**技術スタック**:
+- **埋め込みモデル**: `paraphrase-multilingual-MiniLM-L12-v2` (50+言語対応、日本語含む)
+- **ベクトルストア**: ChromaDB (インメモリ)
+
+**パラメータ**:
+- `query`: セマンティック検索クエリ
+- `name_filter`: 名前プレフィックスフィルタ
+- `limit`: 最大結果数 (デフォルト: 10)
+
+**レスポンス**: 各結果に `score` (0-1) が含まれます。しきい値未満の結果は自動的に除外されます。
+
+**起動時初期化**: サーバー起動時にモデルロードとインデックス構築を実行します。これにより初回検索のタイムアウトを防止しています。
+
+**フォールバック**: セマンティック検索が失敗した場合、従来のキーワード検索にフォールバックします。
+
+**設定** (`.env`):
+```bash
+# セマンティック検索の設定（オプション）
+EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2  # 埋め込みモデル
+SEMANTIC_SEARCH_LIMIT=10  # デフォルト結果数
+SEMANTIC_SEARCH_ENABLED=true  # セマンティック検索の有効/無効
+SEMANTIC_SEARCH_THRESHOLD=0.3  # 最小類似度しきい値 (0-1)
+```
 
 ## Agent Skills で使用可能なツール
 
@@ -277,3 +306,5 @@ mypy または pyright を使用した型チェックを検討。
 - [Strands Agents Documentation](https://strandsagents.com/)
 - [LiteLLM Documentation](https://docs.litellm.ai/)
 - [Pydantic Documentation](https://docs.pydantic.dev)
+- [ChromaDB Documentation](https://docs.trychroma.com/)
+- [Sentence-Transformers Documentation](https://sbert.net/)

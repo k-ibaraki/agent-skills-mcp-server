@@ -1,7 +1,6 @@
 """FastMCP server providing Agent Skills management and execution tools."""
 
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -12,6 +11,7 @@ from fastmcp import FastMCP
 from agent_skills_mcp.config import get_config
 from agent_skills_mcp.llm_client import LLMClient
 from agent_skills_mcp.skills_manager import SkillsManager
+from agent_skills_mcp.vector_store import VectorStore
 
 # Load .env file to ensure all environment variables (including skill-specific ones) are available
 env_file = Path(".env")
@@ -42,6 +42,25 @@ def setup_logging():
     root_logger.addHandler(stream_handler)
 
 
+def initialize_semantic_search():
+    """Initialize vector store and build index at startup."""
+    config = get_config()
+
+    if not config.semantic_search_enabled:
+        logging.info("Semantic search is disabled")
+        return
+
+    logging.info("Initializing semantic search...")
+    vector_store = VectorStore()
+    skills_manager.set_vector_store(vector_store)
+
+    # Initialize immediately to avoid delay on first search
+    if skills_manager.initialize_vector_store():
+        logging.info("Semantic search initialized successfully")
+    else:
+        logging.warning("Failed to initialize semantic search, will use keyword search")
+
+
 # Initialize FastMCP server
 mcp = FastMCP("agent-skills-mcp-server")
 
@@ -54,16 +73,32 @@ llm_client = LLMClient()
 async def skills_search(
     query: str | None = None,
     name_filter: str | None = None,
+    limit: int | None = None,
 ) -> list[dict]:
     """Search for Agent Skills by description or name.
 
-    Args:
-        query: Search query for skill descriptions (partial match).
-        name_filter: Filter by skill name prefix.
-    """
-    results = skills_manager.search_skills(query=query, name_filter=name_filter)
+    Uses semantic search for better relevance matching.
+    Results are filtered by similarity threshold and include relevance scores.
 
-    return [skill.frontmatter.model_dump(exclude_none=True) for skill in results]
+    Args:
+        query: Search query for skill descriptions (semantic search).
+        name_filter: Filter by skill name prefix.
+        limit: Maximum number of results to return (default: 10).
+
+    Returns:
+        List of matching skills with metadata and relevance score.
+    """
+    results = skills_manager.search_skills(
+        query=query, name_filter=name_filter, limit=limit
+    )
+
+    return [
+        {
+            **result.skill.frontmatter.model_dump(exclude_none=True),
+            "score": round(result.score, 3) if result.score is not None else None,
+        }
+        for result in results
+    ]
 
 
 @mcp.tool()
@@ -116,6 +151,9 @@ def main(
     Start the MCP server with stdio or http transport.
     """
     setup_logging()
+
+    # Initialize semantic search at startup (before starting MCP server)
+    initialize_semantic_search()
 
     if transport == "stdio":
         logging.info("Starting MCP server with stdio transport...")

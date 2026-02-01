@@ -64,6 +64,28 @@ class Config(BaseSettings):
         description="Logging level (DEBUG, INFO, WARNING, ERROR)",
     )
 
+    # RAG / Semantic Search configuration
+    embedding_model: str = Field(
+        default="paraphrase-multilingual-MiniLM-L12-v2",
+        description="Sentence-transformers model for embeddings (supports 50+ languages)",
+    )
+    semantic_search_limit: int = Field(
+        default=10,
+        description="Default number of results for semantic search",
+        ge=1,
+        le=100,
+    )
+    semantic_search_enabled: bool = Field(
+        default=True,
+        description="Enable semantic search (falls back to keyword search if disabled or on error)",
+    )
+    semantic_search_threshold: float = Field(
+        default=0.3,
+        description="Minimum similarity score (0-1) for semantic search results",
+        ge=0.0,
+        le=1.0,
+    )
+
     def validate_llm_config(self, model: str) -> None:
         """Validate that required credentials are available for the specified model.
 
