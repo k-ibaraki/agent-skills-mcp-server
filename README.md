@@ -5,6 +5,7 @@ MCP (Model Context Protocol) サーバーを使って Agent Skills を管理・�
 ## 特徴
 
 - **2つのMCPツール**: スキル検索と実行機能を提供
+- **セマンティック検索**: ChromaDB + sentence-transformers による高精度な多言語スキル検索（日本語含む50+言語対応）
 - **マルチプロバイダー対応**: Anthropic API、AWS Bedrock、Google Vertex AI に対応（Strands Agents + LiteLLM経由）
 - **Transport柔軟性**: STDIO（Claude Desktop統合）とHTTPの両方をサポート
 - **型安全**: Pydanticによる完全な型チェックとバリデーション
@@ -147,17 +148,23 @@ docker compose down
 
 ### 1. `skills-search`
 
-スキルを検索します（description/nameでフィルタリング）。
+スキルをセマンティック検索します。日本語や英語など50+言語に対応しています。
 
 **パラメータ**:
-- `query` (optional): description内を検索（部分一致、大文字小文字区別なし）
+- `query` (optional): セマンティック検索クエリ（例: "天気予報", "ドキュメント検索"）
 - `name_filter` (optional): name前方一致フィルタ（大文字小文字区別なし）
+- `limit` (optional): 最大結果数（デフォルト: 10）
 
 **レスポンス**:
 - `name`: スキル名
 - `description`: スキルの説明
 - `license`: ライセンス（存在する場合）
 - `metadata`: 追加メタデータ（author、versionなど）
+
+**検索例**:
+- `query="天気予報"` → `weather-forecast` スキルが上位にヒット
+- `query="ドキュメント検索"` → `notepm-search` スキルが上位にヒット
+- `query="code review"` → `code-review` スキルが上位にヒット
 
 ### 2. `skills-execute`
 
@@ -418,3 +425,5 @@ Apache-2.0
 - [FastMCP Documentation](https://gofastmcp.com)
 - [Strands Agents Documentation](https://strandsagents.com/)
 - [LiteLLM Documentation](https://docs.litellm.ai/)
+- [ChromaDB Documentation](https://docs.trychroma.com/)
+- [Sentence-Transformers Documentation](https://sbert.net/)

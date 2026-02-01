@@ -1,7 +1,6 @@
 """FastMCP server providing Agent Skills management and execution tools."""
 
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -12,6 +11,7 @@ from fastmcp import FastMCP
 from agent_skills_mcp.config import get_config
 from agent_skills_mcp.llm_client import LLMClient
 from agent_skills_mcp.skills_manager import SkillsManager
+from agent_skills_mcp.vector_store import VectorStore
 
 # Load .env file to ensure all environment variables (including skill-specific ones) are available
 env_file = Path(".env")
@@ -49,19 +49,29 @@ mcp = FastMCP("agent-skills-mcp-server")
 skills_manager = SkillsManager()
 llm_client = LLMClient()
 
+# Initialize vector store (lazy initialization - model loads on first search)
+vector_store = VectorStore()
+skills_manager.set_vector_store(vector_store)
+
 
 @mcp.tool()
 async def skills_search(
     query: str | None = None,
     name_filter: str | None = None,
+    limit: int | None = None,
 ) -> list[dict]:
     """Search for Agent Skills by description or name.
 
+    Uses semantic search for better relevance matching.
+
     Args:
-        query: Search query for skill descriptions (partial match).
+        query: Search query for skill descriptions (semantic search).
         name_filter: Filter by skill name prefix.
+        limit: Maximum number of results to return (default: 10).
     """
-    results = skills_manager.search_skills(query=query, name_filter=name_filter)
+    results = skills_manager.search_skills(
+        query=query, name_filter=name_filter, limit=limit
+    )
 
     return [skill.frontmatter.model_dump(exclude_none=True) for skill in results]
 
