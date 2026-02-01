@@ -143,6 +143,10 @@ class VectorStore:
             limit = self._config.semantic_search_limit
 
         try:
+            # Return empty if no skills indexed
+            if not self._skills_map:
+                return []
+
             results = self._collection.query(
                 query_texts=[query],
                 n_results=min(limit, len(self._skills_map)),
