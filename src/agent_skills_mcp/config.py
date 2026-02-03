@@ -1,17 +1,27 @@
 """Configuration management for Agent Skills MCP Server."""
 
+import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Load .env file if exists and not in test mode
+# This ensures environment variables are available before Config is instantiated
+if not os.getenv("TESTING") and Path(".env").exists():
+    load_dotenv(".env")
+
 
 class Config(BaseSettings):
-    """Application configuration loaded from environment variables."""
+    """Application configuration loaded from environment variables.
+
+    Note: This class reads from environment variables only.
+    For development, use load_dotenv() before creating Config instances
+    (already handled in server.py startup).
+    """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
     )
@@ -120,6 +130,13 @@ class Config(BaseSettings):
         description="OAuth callback redirect path",
     )
 
+    # Opaque token verification (for providers using non-JWT access tokens)
+    oauth_tokeninfo_url: str | None = Field(
+        default=None,
+        description="Token introspection endpoint URL for opaque token verification. "
+        "If not set, auto-detected for known providers (e.g., Google).",
+    )
+
     # Google OAuth specific configuration
     google_oauth_access_type: str | None = Field(
         default=None,
@@ -174,6 +191,25 @@ class Config(BaseSettings):
         if self.google_oauth_prompt:
             extra_params["prompt"] = self.google_oauth_prompt
         return extra_params
+
+    def get_oauth_tokeninfo_url(self) -> str | None:
+        """Get the tokeninfo URL for opaque token verification.
+
+        If oauth_tokeninfo_url is explicitly set, use it.
+        Otherwise, auto-detect based on known providers.
+
+        Returns:
+            Tokeninfo URL if available, None if not needed (JWT tokens).
+        """
+        if self.oauth_tokeninfo_url:
+            return self.oauth_tokeninfo_url
+
+        # Auto-detect for known providers with opaque access tokens
+        if self.oauth_config_url:
+            if "accounts.google.com" in self.oauth_config_url:
+                return "https://oauth2.googleapis.com/tokeninfo"
+
+        return None
 
     def validate_oauth_config(self) -> None:
         """Validate OAuth configuration when OAuth is enabled.

@@ -2,22 +2,16 @@
 
 import logging
 import sys
-from pathlib import Path
 
 import typer
-from dotenv import load_dotenv
 from fastmcp import FastMCP
 from fastmcp.server.auth.oidc_proxy import OIDCProxy
 
+from agent_skills_mcp.auth import OpaqueTokenVerifier
 from agent_skills_mcp.config import get_config
 from agent_skills_mcp.llm_client import LLMClient
 from agent_skills_mcp.skills_manager import SkillsManager
 from agent_skills_mcp.vector_store import VectorStore
-
-# Load .env file to ensure all environment variables (including skill-specific ones) are available
-env_file = Path(".env")
-if env_file.exists():
-    load_dotenv(env_file)
 
 # Typer app
 app = typer.Typer()
@@ -89,16 +83,32 @@ def _create_auth_provider():
     if extra_params:
         logging.info(f"OAuth extra authorize params: {extra_params}")
 
+    # Create custom token verifier for providers with opaque (non-JWT) access tokens
+    token_verifier = None
+    tokeninfo_url = config.get_oauth_tokeninfo_url()
+    if tokeninfo_url:
+        logging.info(
+            f"Using OpaqueTokenVerifier with tokeninfo endpoint: {tokeninfo_url}"
+        )
+        token_verifier = OpaqueTokenVerifier(
+            tokeninfo_url=tokeninfo_url,
+            client_id=config.oauth_client_id,
+            required_scopes=required_scopes,
+        )
+
     # Create OIDCProxy
+    # Note: When using a custom token_verifier, required_scopes must be configured
+    # on the verifier itself, not on OIDCProxy
     return OIDCProxy(
         config_url=config.oauth_config_url,
         client_id=config.oauth_client_id,
         client_secret=config.oauth_client_secret,
         base_url=config.oauth_server_base_url,
         redirect_path=config.oauth_redirect_path,
-        required_scopes=required_scopes,
+        required_scopes=required_scopes if not token_verifier else None,
         allowed_client_redirect_uris=allowed_uris,
         extra_authorize_params=extra_params if extra_params else None,
+        token_verifier=token_verifier,
     )
 
 

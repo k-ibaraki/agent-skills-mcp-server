@@ -144,3 +144,42 @@ class TestOAuthConfig:
         assert "OAUTH_CONFIG_URL" in error_message
         assert "OAUTH_CLIENT_ID" in error_message
         assert "OAUTH_CLIENT_SECRET" in error_message
+
+
+class TestOAuthTokeninfoUrl:
+    """Test get_oauth_tokeninfo_url method for opaque token verification."""
+
+    def test_explicit_tokeninfo_url(self):
+        """Explicit oauth_tokeninfo_url should be returned."""
+        config = Config(
+            oauth_tokeninfo_url="https://custom.provider/tokeninfo",
+            oauth_config_url="https://accounts.google.com/.well-known/openid-configuration",
+        )
+        assert config.get_oauth_tokeninfo_url() == "https://custom.provider/tokeninfo"
+
+    def test_google_autodetect(self):
+        """Google tokeninfo URL should be auto-detected from config_url."""
+        config = Config(
+            oauth_config_url="https://accounts.google.com/.well-known/openid-configuration",
+            oauth_tokeninfo_url=None,  # Explicitly unset to avoid .env override
+        )
+        assert (
+            config.get_oauth_tokeninfo_url()
+            == "https://oauth2.googleapis.com/tokeninfo"
+        )
+
+    def test_unknown_provider_returns_none(self):
+        """Unknown providers should return None (use default JWT verification)."""
+        config = Config(
+            oauth_config_url="https://login.microsoftonline.com/tenant/v2.0/.well-known/openid-configuration",
+            oauth_tokeninfo_url=None,  # Explicitly unset to avoid .env override
+        )
+        assert config.get_oauth_tokeninfo_url() is None
+
+    def test_no_config_url_returns_none(self):
+        """No config_url should return None."""
+        config = Config(
+            oauth_config_url=None,  # Explicitly unset to avoid .env override
+            oauth_tokeninfo_url=None,  # Explicitly unset to avoid .env override
+        )
+        assert config.get_oauth_tokeninfo_url() is None
