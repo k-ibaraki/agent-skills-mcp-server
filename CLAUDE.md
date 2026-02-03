@@ -187,10 +187,57 @@ Instructions for the LLM...
 
 認証情報は環境変数で管理 (.env ファイル)。詳細は `.env.example` を参照。
 
+## OIDC/OAuth認証（オプション）
+
+HTTPトランスポートでOAuth/OIDC認証を有効にできます。**標準OIDC仕様に準拠した任意のプロバイダー**で利用可能です。
+
+### 対応プロバイダー
+- **Google OAuth 2.0**
+- **Azure AD**
+- **Okta**
+- その他標準OIDC準拠プロバイダー
+
+### 設定例: Google OAuth
+
+以下では**Google OAuthを例**に説明しますが、他のOIDC準拠プロバイダーでも同様の手順で設定できます。
+
+1. **OAuthプロバイダーでの設定**（Google Cloud Consoleの場合）:
+   - OAuth 2.0クライアントIDを作成
+   - 承認済みのリダイレクトURIに `http://localhost:8080/auth/callback` を追加
+   - クライアントIDとシークレットを取得
+
+2. **.envファイルに設定追加**:
+   ```bash
+   OAUTH_ENABLED=true
+   OAUTH_CONFIG_URL=https://accounts.google.com/.well-known/openid-configuration
+   OAUTH_CLIENT_ID=your-client-id.apps.googleusercontent.com
+   OAUTH_CLIENT_SECRET=your-client-secret
+   OAUTH_SERVER_BASE_URL=http://localhost:8080
+   OAUTH_REQUIRED_SCOPES=openid,email,profile
+   ```
+
+3. **HTTPモードで起動**:
+   ```bash
+   uv run agent-skills-mcp --transport http --port 8080
+   ```
+
+### セキュリティ設定
+
+- **開発環境**: `OAUTH_ALLOWED_REDIRECT_URIS` 未設定（全許可）
+- **本番環境**: 明示的なパターン指定を推奨
+  ```bash
+  OAUTH_ALLOWED_REDIRECT_URIS=https://claude.ai/*,https://*.anthropic.com/*
+  ```
+
+### 注意事項
+- OAuth認証はHTTPトランスポートでのみ動作（stdioは非対応）
+- リフレッシュトークンが必要な場合: `GOOGLE_OAUTH_ACCESS_TYPE=offline`
+
 ### Transport モード
 
 - **stdio**: Claude Desktop 統合用 (デフォルト)
 - **http**: Web 展開用 (`--transport http --port 8080`)
+- **http + OAuth**: OAuth認証付きHTTP (`--transport http` + 環境変数でOAuth有効化)
 
 ## テスト戦略
 
