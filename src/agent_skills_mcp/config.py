@@ -86,6 +86,118 @@ class Config(BaseSettings):
         le=1.0,
     )
 
+    # OIDC/OAuth authentication configuration (HTTP transport only)
+    oauth_enabled: bool = Field(
+        default=False,
+        description="Enable OIDC/OAuth authentication (HTTP transport only)",
+    )
+    oauth_config_url: str | None = Field(
+        default=None,
+        description="OIDC configuration endpoint URL (e.g., https://accounts.google.com/.well-known/openid-configuration)",
+    )
+    oauth_client_id: str | None = Field(
+        default=None,
+        description="OAuth client ID",
+    )
+    oauth_client_secret: str | None = Field(
+        default=None,
+        description="OAuth client secret",
+    )
+    oauth_server_base_url: str = Field(
+        default="http://localhost:8080",
+        description="FastMCP server public base URL",
+    )
+    oauth_required_scopes: str | None = Field(
+        default=None,
+        description="Required OAuth scopes (comma-separated)",
+    )
+    oauth_allowed_redirect_uris: str | None = Field(
+        default=None,
+        description="Allowed MCP client redirect URIs (comma-separated, wildcard support). None=allow all, ''=deny all",
+    )
+    oauth_redirect_path: str = Field(
+        default="/auth/callback",
+        description="OAuth callback redirect path",
+    )
+
+    # Google OAuth specific configuration
+    google_oauth_access_type: str | None = Field(
+        default=None,
+        description="Google OAuth access_type parameter (e.g., 'offline' for refresh token support)",
+    )
+    google_oauth_prompt: str | None = Field(
+        default=None,
+        description="Google OAuth prompt parameter (e.g., 'consent' to force consent screen)",
+    )
+
+    def get_oauth_scopes(self) -> list[str]:
+        """Parse comma-separated OAuth scopes into a list.
+
+        Returns:
+            List of scope strings. Returns empty list if oauth_required_scopes is None or empty.
+        """
+        if not self.oauth_required_scopes:
+            return []
+        return [
+            scope.strip()
+            for scope in self.oauth_required_scopes.split(",")
+            if scope.strip()
+        ]
+
+    def get_oauth_allowed_redirect_uris(self) -> list[str] | None:
+        """Parse comma-separated redirect URIs into a list.
+
+        Returns:
+            None: Allow all redirect URIs (development mode)
+            []: Deny all redirect URIs
+            list[str]: Explicit list of allowed redirect URIs (production mode)
+        """
+        if self.oauth_allowed_redirect_uris is None:
+            return None  # Allow all
+        if not self.oauth_allowed_redirect_uris.strip():
+            return []  # Deny all
+        return [
+            uri.strip()
+            for uri in self.oauth_allowed_redirect_uris.split(",")
+            if uri.strip()
+        ]
+
+    def get_google_extra_params(self) -> dict[str, str]:
+        """Get Google-specific extra authorization parameters.
+
+        Returns:
+            Dictionary of extra parameters for Google OAuth.
+        """
+        extra_params = {}
+        if self.google_oauth_access_type:
+            extra_params["access_type"] = self.google_oauth_access_type
+        if self.google_oauth_prompt:
+            extra_params["prompt"] = self.google_oauth_prompt
+        return extra_params
+
+    def validate_oauth_config(self) -> None:
+        """Validate OAuth configuration when OAuth is enabled.
+
+        Raises:
+            ValueError: If required OAuth settings are missing.
+        """
+        if not self.oauth_enabled:
+            return
+
+        missing_fields = []
+        if not self.oauth_config_url:
+            missing_fields.append("OAUTH_CONFIG_URL")
+        if not self.oauth_client_id:
+            missing_fields.append("OAUTH_CLIENT_ID")
+        if not self.oauth_client_secret:
+            missing_fields.append("OAUTH_CLIENT_SECRET")
+
+        if missing_fields:
+            raise ValueError(
+                f"OAuth is enabled but required settings are missing: {', '.join(missing_fields)}. "
+                "Please set them in your .env file or disable OAuth by setting OAUTH_ENABLED=false."
+            )
+
     def validate_llm_config(self, model: str) -> None:
         """Validate that required credentials are available for the specified model.
 
