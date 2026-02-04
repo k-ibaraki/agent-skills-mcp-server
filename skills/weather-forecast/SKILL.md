@@ -1,7 +1,7 @@
 ---
 name: weather-forecast
 description: 気象庁の公式APIから日本の都市の天気予報を取得して日本語で回答します。WebFetchツールで気象庁の公式データから信頼性の高い天気情報を取得します。
-license: Apache-2.0
+license: MIT
 metadata:
   author: agent-skills-mcp-server
   version: "3.0"

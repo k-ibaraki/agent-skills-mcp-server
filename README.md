@@ -525,7 +525,7 @@ uv run pytest
 
 ## ライセンス
 
-Apache-2.0
+MIT
 
 ## 参考資料
 
