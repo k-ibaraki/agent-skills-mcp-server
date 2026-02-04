@@ -323,7 +323,7 @@ skills/
 ---
 name: your-skill-name
 description: Brief description of what this skill does
-license: Apache-2.0
+license: MIT
 metadata:
   author: Your Name
   version: "1.0"
@@ -525,7 +525,7 @@ uv run pytest
 
 ## ライセンス
 
-Apache-2.0
+MIT
 
 ## 参考資料
 

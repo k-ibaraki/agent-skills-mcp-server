@@ -1,7 +1,7 @@
 ---
 name: example-skill
 description: A simple example skill for testing the Agent Skills MCP server. Use this skill when you need to demonstrate basic skill execution.
-license: Apache-2.0
+license: MIT
 metadata:
   author: agent-skills-mcp-server
   version: "1.0"

@@ -155,7 +155,7 @@ if not skill_file.exists():
 ---
 name: skill-name
 description: Brief description (1-1024 chars)
-license: Apache-2.0  # Optional
+license: MIT  # Optional
 metadata:  # Optional
   author: Author Name
   version: "1.0"
