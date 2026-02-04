@@ -2,21 +2,16 @@
 
 import logging
 import sys
-from pathlib import Path
 
 import typer
-from dotenv import load_dotenv
 from fastmcp import FastMCP
+from fastmcp.server.auth.oidc_proxy import OIDCProxy
 
+from agent_skills_mcp.auth import GoogleTokenVerifier, OpaqueTokenVerifier
 from agent_skills_mcp.config import get_config
 from agent_skills_mcp.llm_client import LLMClient
 from agent_skills_mcp.skills_manager import SkillsManager
 from agent_skills_mcp.vector_store import VectorStore
-
-# Load .env file to ensure all environment variables (including skill-specific ones) are available
-env_file = Path(".env")
-if env_file.exists():
-    load_dotenv(env_file)
 
 # Typer app
 app = typer.Typer()
@@ -61,8 +56,84 @@ def initialize_semantic_search():
         logging.warning("Failed to initialize semantic search, will use keyword search")
 
 
+def _create_auth_provider():
+    """Create OAuth authentication provider based on configuration.
+
+    Returns:
+        OIDCProxy | None: OIDCProxy instance if OAuth is enabled, None otherwise.
+
+    Raises:
+        ValueError: If OAuth configuration is invalid.
+    """
+    config = get_config()
+
+    if not config.oauth_enabled:
+        return None
+
+    # Validate configuration
+    config.validate_oauth_config()
+
+    # Get redirect URIs, scopes, and extra parameters
+    allowed_uris = config.get_oauth_allowed_redirect_uris()
+    required_scopes = config.get_oauth_scopes() or ["openid"]
+    extra_params = config.get_google_extra_params()
+
+    # Log configuration
+    logging.info(f"OAuth allowed redirect URIs: {allowed_uris}")
+    if extra_params:
+        logging.info(f"OAuth extra authorize params: {extra_params}")
+
+    # Create custom token verifier for providers with opaque (non-JWT) access tokens
+    token_verifier = None
+    tokeninfo_url = config.get_oauth_tokeninfo_url()
+    if tokeninfo_url:
+        # Use GoogleTokenVerifier for Google OAuth (includes scope aliases)
+        if "oauth2.googleapis.com" in tokeninfo_url:
+            logging.info(
+                "Using GoogleTokenVerifier with built-in scope aliases "
+                f"for tokeninfo endpoint: {tokeninfo_url}"
+            )
+            token_verifier = GoogleTokenVerifier(
+                client_id=config.oauth_client_id,
+                required_scopes=required_scopes,
+            )
+        else:
+            # Generic OpaqueTokenVerifier for other providers
+            logging.info(
+                f"Using OpaqueTokenVerifier with tokeninfo endpoint: {tokeninfo_url}"
+            )
+            token_verifier = OpaqueTokenVerifier(
+                tokeninfo_url=tokeninfo_url,
+                client_id=config.oauth_client_id,
+                required_scopes=required_scopes,
+            )
+
+    # Create OIDCProxy
+    # Note: When using a custom token_verifier, required_scopes must NOT be provided
+    # to OIDCProxy at all - it must be configured on the verifier itself.
+    oidc_kwargs = {
+        "config_url": config.oauth_config_url,
+        "client_id": config.oauth_client_id,
+        "client_secret": config.oauth_client_secret,
+        "base_url": config.oauth_server_base_url,
+        "redirect_path": config.oauth_redirect_path,
+        "allowed_client_redirect_uris": allowed_uris,
+    }
+
+    # Only add required_scopes if NOT using custom token_verifier
+    if not token_verifier:
+        oidc_kwargs["required_scopes"] = required_scopes
+    else:
+        oidc_kwargs["token_verifier"] = token_verifier
+
+    if extra_params:
+        oidc_kwargs["extra_authorize_params"] = extra_params
+
+    return OIDCProxy(**oidc_kwargs)
+
+
 # Initialize FastMCP server
-mcp = FastMCP("agent-skills-mcp-server")
+mcp = FastMCP("agent-skills-mcp-server", auth=_create_auth_provider())
 
 # Initialize managers
 skills_manager = SkillsManager()
@@ -152,6 +223,16 @@ def main(
     """
     setup_logging()
 
+    config = get_config()
+
+    # OAuth authentication is only available with HTTP transport
+    if config.oauth_enabled and transport != "http":
+        logging.error(
+            "OAuth authentication is only available with HTTP transport. "
+            "Please use '--transport http' or disable OAuth by setting OAUTH_ENABLED=false."
+        )
+        raise typer.Exit(code=1)
+
     # Initialize semantic search at startup (before starting MCP server)
     initialize_semantic_search()
 
@@ -159,7 +240,17 @@ def main(
         logging.info("Starting MCP server with stdio transport...")
         mcp.run()
     elif transport == "http":
-        logging.info(f"Starting MCP server with http transport on {host}:{port}...")
+        if config.oauth_enabled:
+            logging.info(
+                f"Starting MCP server with http transport and OAuth authentication on {host}:{port}..."
+            )
+            logging.info(
+                f"OAuth callback URL: {config.oauth_server_base_url}{config.oauth_redirect_path}"
+            )
+        else:
+            logging.info(
+                f"Starting MCP server with http transport (no auth) on {host}:{port}..."
+            )
         mcp.run(transport="http", host=host, port=port)
     else:
         logging.error(f"Invalid transport: {transport}. Use 'stdio' or 'http'.")

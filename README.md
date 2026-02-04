@@ -8,6 +8,7 @@ MCP (Model Context Protocol) サーバーを使って Agent Skills を管理・�
 - **セマンティック検索**: ChromaDB + sentence-transformers による高精度な多言語スキル検索（日本語含む50+言語対応）
 - **マルチプロバイダー対応**: Anthropic API、AWS Bedrock、Google Vertex AI に対応（Strands Agents + LiteLLM経由）
 - **Transport柔軟性**: STDIO（Claude Desktop統合）とHTTPの両方をサポート
+- **OAuth認証**: Google、Azure AD、Okta等の標準OIDC準拠プロバイダーに対応（HTTPモード）
 - **型安全**: Pydanticによる完全な型チェックとバリデーション
 - **Agent Skills仕様準拠**: Anthropic公式仕様に準拠したスキル管理
 
@@ -81,9 +82,17 @@ ANTHROPIC_API_KEY=sk-ant-your-api-key-here
 # VERTEXAI_PROJECT=your-gcp-project-id
 # VERTEXAI_LOCATION=us-central1
 # 注: 認証には gcloud auth application-default login が必要
+
+# OAuth/OIDC認証（HTTPモードのみ、オプション）
+# 以下はGoogle OAuthの例。Azure AD、Oktaなど他のOIDC準拠プロバイダーでも利用可能
+# OAUTH_ENABLED=true
+# OAUTH_CONFIG_URL=https://accounts.google.com/.well-known/openid-configuration
+# OAUTH_CLIENT_ID=your-client-id.apps.googleusercontent.com
+# OAUTH_CLIENT_SECRET=your-client-secret
+# 詳細は「OAuth認証付きHTTPサーバー」セクションを参照
 ```
 
-詳細なモデル指定例は「[サポートするLLMモデル](#サポートするllmモデル)」セクションを参照してください。
+詳細なモデル指定例は「[サポートするLLMモデル](#サポートするllmモデル)」セクションを参照してください。OAuth認証の設定方法は「[OAuth認証付きHTTPサーバー](#oauth認証付きhttpサーバーオプション)」セクションを参照してください。
 
 ## 使用方法
 
@@ -128,6 +137,87 @@ uv run agent-skills-mcp --transport http --host 0.0.0.0 --port 8080
 ```
 
 **注意**: HTTPモードは、MCPプロトコルのstreamable-http transportを使用します。通常のREST APIではなく、MCP対応クライアントからの接続が必要です。
+
+### OAuth認証付きHTTPサーバー（オプション）
+
+HTTPモードでOAuth/OIDC認証を有効にできます。**標準OIDC仕様に準拠した任意のプロバイダー**（Google、Azure AD、Oktaなど）で利用可能です。
+
+以下では**Google OAuthを例**に説明しますが、他のOIDC準拠プロバイダーでも同様の手順で設定できます。
+
+#### 設定例: Google OAuth
+
+1. **OAuthプロバイダーでの設定**（Google Cloud Consoleの場合）:
+   - [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作成
+   - 「APIとサービス」→「認証情報」→「認証情報を作成」→「OAuth 2.0 クライアント ID」を選択
+   - アプリケーションの種類: 「ウェブアプリケーション」
+   - 承認済みのリダイレクトURIに以下を追加: `http://localhost:8080/auth/callback`
+   - クライアントIDとクライアントシークレットをコピー
+
+2. **`.env` ファイルに設定追加**:
+
+```bash
+# OAuth認証を有効化
+OAUTH_ENABLED=true
+
+# Google OIDC設定
+OAUTH_CONFIG_URL=https://accounts.google.com/.well-known/openid-configuration
+OAUTH_CLIENT_ID=your-client-id.apps.googleusercontent.com
+OAUTH_CLIENT_SECRET=your-client-secret
+
+# サーバーのベースURL
+OAUTH_SERVER_BASE_URL=http://localhost:8080
+
+# 必須スコープ（カンマ区切り）
+OAUTH_REQUIRED_SCOPES=openid,email,profile
+
+# リフレッシュトークンサポート（オプション）
+GOOGLE_OAUTH_ACCESS_TYPE=offline
+```
+
+3. **サーバー起動**:
+
+```bash
+uv run agent-skills-mcp --transport http --port 8080
+```
+
+起動時に以下のようなログが表示されます：
+```
+Starting MCP server with http transport and OAuth authentication on 127.0.0.1:8080...
+OAuth callback URL: http://localhost:8080/auth/callback
+```
+
+#### セキュリティ設定
+
+**開発環境**: リダイレクトURI制限なし（すべて許可）
+```bash
+# OAUTH_ALLOWED_REDIRECT_URIS を未設定
+```
+
+**本番環境**: 明示的なリダイレクトURI制限を推奨
+```bash
+# 信頼できるドメインのみ許可（ワイルドカード対応）
+OAUTH_ALLOWED_REDIRECT_URIS=https://claude.ai/*,https://*.anthropic.com/*
+```
+
+#### その他のOIDCプロバイダーでの設定例
+
+すべてのOIDC準拠プロバイダーで同様に設定できます。以下は代表的な例です。
+
+**Azure AD**:
+```bash
+OAUTH_CONFIG_URL=https://login.microsoftonline.com/{tenant-id}/v2.0/.well-known/openid-configuration
+OAUTH_CLIENT_ID=your-azure-client-id
+OAUTH_CLIENT_SECRET=your-azure-client-secret
+```
+
+**Okta**:
+```bash
+OAUTH_CONFIG_URL=https://your-domain.okta.com/.well-known/openid-configuration
+OAUTH_CLIENT_ID=your-okta-client-id
+OAUTH_CLIENT_SECRET=your-okta-client-secret
+```
+
+詳細は `.env.example` を参照してください。
 
 ### Dockerで起動
 
@@ -419,6 +509,19 @@ uv run pytest
 - `claude_desktop_config.json` のパスが正しいか確認
 - Claude Desktopを再起動
 - ログを確認（macOS: `~/Library/Logs/Claude/`）
+
+### OAuth認証でエラーが発生する
+
+- HTTPモードで起動しているか確認（OAuth認証はstdioモードでは動作しません）
+- `.env` ファイルで必須設定が揃っているか確認:
+  - `OAUTH_ENABLED=true`
+  - `OAUTH_CONFIG_URL`（使用するOIDCプロバイダーの設定エンドポイント）
+  - `OAUTH_CLIENT_ID`
+  - `OAUTH_CLIENT_SECRET`
+- OAuthプロバイダー側で承認済みのリダイレクトURIが正しく設定されているか確認
+  - 例（Google Cloud Consoleの場合）: `http://localhost:8080/auth/callback`
+  - プロバイダーによって設定画面が異なります
+- ログレベルを `DEBUG` に設定して詳細なログを確認: `.env` に `LOG_LEVEL=DEBUG` を追加
 
 ## ライセンス
 

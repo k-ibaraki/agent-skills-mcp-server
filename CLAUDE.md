@@ -187,10 +187,104 @@ Instructions for the LLM...
 
 認証情報は環境変数で管理 (.env ファイル)。詳細は `.env.example` を参照。
 
+## OIDC/OAuth認証（オプション）
+
+HTTPトランスポートでOAuth/OIDC認証を有効にできます。**標準OIDC仕様に準拠した任意のプロバイダー**で利用可能です。
+
+### 対応プロバイダー
+- **Google OAuth 2.0**
+- **Azure AD**
+- **Okta**
+- その他標準OIDC準拠プロバイダー
+
+### 設定例: Google OAuth
+
+以下では**Google OAuthを例**に説明しますが、他のOIDC準拠プロバイダーでも同様の手順で設定できます。
+
+1. **OAuthプロバイダーでの設定**（Google Cloud Consoleの場合）:
+   - OAuth 2.0クライアントIDを作成
+   - 承認済みのリダイレクトURIに `http://localhost:8080/auth/callback` を追加
+   - クライアントIDとシークレットを取得
+
+2. **.envファイルに設定追加**:
+   ```bash
+   OAUTH_ENABLED=true
+   OAUTH_CONFIG_URL=https://accounts.google.com/.well-known/openid-configuration
+   OAUTH_CLIENT_ID=your-client-id.apps.googleusercontent.com
+   OAUTH_CLIENT_SECRET=your-client-secret
+   OAUTH_SERVER_BASE_URL=http://localhost:8080
+   OAUTH_REQUIRED_SCOPES=openid,email,profile
+   ```
+
+3. **HTTPモードで起動**:
+   ```bash
+   uv run agent-skills-mcp --transport http --port 8080
+   ```
+
+### セキュリティ設定
+
+- **開発環境**: `OAUTH_ALLOWED_REDIRECT_URIS` 未設定（全許可）
+- **本番環境**: 明示的なパターン指定を推奨
+  ```bash
+  OAUTH_ALLOWED_REDIRECT_URIS=https://claude.ai/*,https://*.anthropic.com/*
+  ```
+
+### 注意事項
+- OAuth認証はHTTPトランスポートでのみ動作（stdioは非対応）
+- リフレッシュトークンが必要な場合: `GOOGLE_OAUTH_ACCESS_TYPE=offline`
+
+### スコープエイリアスの仕組み（Google OAuth）
+
+**問題**: GoogleのOAuthは、トークン検証レスポンスで完全なURI形式のスコープを返します：
+```json
+{
+  "scope": "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
+}
+```
+
+しかし、設定ファイルでは短い名前を使用します：
+```bash
+OAUTH_REQUIRED_SCOPES=openid,email,profile
+```
+
+**解決策**: `GoogleTokenVerifier`は自動的にスコープエイリアスを処理します：
+- `email` ↔ `https://www.googleapis.com/auth/userinfo.email`
+- `profile` ↔ `https://www.googleapis.com/auth/userinfo.profile`
+
+これにより、設定ファイルでは短い名前を使用でき、トークン検証時に自動的にマッピングされます。
+
+### 他のOAuthプロバイダーへの対応
+
+Azure ADやOktaなど、他のプロバイダーでスコープ形式の不一致がある場合：
+
+1. **カスタムTokenVerifierを作成**:
+   ```python
+   from agent_skills_mcp.auth import OpaqueTokenVerifier
+
+   AZURE_SCOPE_ALIASES = {
+       "email": ["https://graph.microsoft.com/User.Read"],
+       # 他のエイリアスを追加
+   }
+
+   verifier = OpaqueTokenVerifier(
+       tokeninfo_url="https://...",
+       client_id="your-client-id",
+       required_scopes=["openid", "email"],
+       scope_aliases=AZURE_SCOPE_ALIASES,
+   )
+   ```
+
+2. **`server.py`で使用**:
+   `_create_auth_provider`関数を修正して、Azure AD検出時にカスタムverifierを使用します。
+
+3. **テストを追加**:
+   `tests/test_opaque_token_verifier.py`を参考に、プロバイダー固有のテストを追加します。
+
 ### Transport モード
 
 - **stdio**: Claude Desktop 統合用 (デフォルト)
 - **http**: Web 展開用 (`--transport http --port 8080`)
+- **http + OAuth**: OAuth認証付きHTTP (`--transport http` + 環境変数でOAuth有効化)
 
 ## テスト戦略
 
