@@ -272,6 +272,160 @@ class TestOpaqueTokenVerifier:
 
 
 @pytest.mark.unit
+class TestOpaqueTokenVerifierScopeAliases:
+    """Test OpaqueTokenVerifier scope alias functionality."""
+
+    @pytest.fixture
+    def verifier_with_aliases(self):
+        """Create a verifier with scope aliases for testing."""
+        return OpaqueTokenVerifier(
+            tokeninfo_url="https://example.com/tokeninfo",
+            client_id="test-client-id",
+            required_scopes=["openid", "email", "profile"],
+            scope_aliases={
+                "email": ["https://www.googleapis.com/auth/userinfo.email"],
+                "profile": ["https://www.googleapis.com/auth/userinfo.profile"],
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_scope_alias_matching(self, verifier_with_aliases):
+        """Test that scope aliases are correctly matched."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "aud": "test-client-id",
+            "expires_in": "3600",
+            # Google returns full URIs for email and profile scopes
+            "scope": "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile",
+            "email": "test@example.com",
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_response
+
+        with patch("httpx.AsyncClient") as mock_async_client:
+            mock_async_client.return_value.__aenter__.return_value = mock_client
+
+            result = await verifier_with_aliases.verify_token("valid-token")
+
+            # Should succeed because aliases map "email" -> full URI
+            assert result is not None
+            assert result.client_id == "test@example.com"
+
+    @pytest.mark.asyncio
+    async def test_scope_direct_match_takes_precedence(self, verifier_with_aliases):
+        """Test that direct scope match works even with aliases configured."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "aud": "test-client-id",
+            "expires_in": "3600",
+            # Direct scope names (not URIs)
+            "scope": "openid email profile",
+            "email": "test@example.com",
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_response
+
+        with patch("httpx.AsyncClient") as mock_async_client:
+            mock_async_client.return_value.__aenter__.return_value = mock_client
+
+            result = await verifier_with_aliases.verify_token("valid-token")
+
+            assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_scope_alias_partial_match(self, verifier_with_aliases):
+        """Test that partial alias match fails correctly."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "aud": "test-client-id",
+            "expires_in": "3600",
+            # Missing profile scope (neither direct nor alias)
+            "scope": "openid https://www.googleapis.com/auth/userinfo.email",
+            "email": "test@example.com",
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_response
+
+        with patch("httpx.AsyncClient") as mock_async_client:
+            mock_async_client.return_value.__aenter__.return_value = mock_client
+
+            result = await verifier_with_aliases.verify_token("valid-token")
+
+            # Should fail because "profile" scope is missing
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_no_aliases_configured(self):
+        """Test that verification works without aliases when scopes match directly."""
+        verifier = OpaqueTokenVerifier(
+            tokeninfo_url="https://example.com/tokeninfo",
+            client_id="test-client-id",
+            required_scopes=["openid", "email"],
+            # No scope_aliases
+        )
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "aud": "test-client-id",
+            "expires_in": "3600",
+            "scope": "openid email",
+            "email": "test@example.com",
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_response
+
+        with patch("httpx.AsyncClient") as mock_async_client:
+            mock_async_client.return_value.__aenter__.return_value = mock_client
+
+            result = await verifier.verify_token("valid-token")
+
+            assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_multiple_aliases_for_scope(self):
+        """Test that multiple aliases for a single scope work."""
+        verifier = OpaqueTokenVerifier(
+            tokeninfo_url="https://example.com/tokeninfo",
+            client_id="test-client-id",
+            required_scopes=["read"],
+            scope_aliases={
+                "read": [
+                    "https://api.example.com/read",
+                    "https://api.example.com/readonly",
+                ],
+            },
+        )
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "aud": "test-client-id",
+            "expires_in": "3600",
+            # Second alias matches
+            "scope": "https://api.example.com/readonly",
+            "sub": "user-123",
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_response
+
+        with patch("httpx.AsyncClient") as mock_async_client:
+            mock_async_client.return_value.__aenter__.return_value = mock_client
+
+            result = await verifier.verify_token("valid-token")
+
+            assert result is not None
+
+
+@pytest.mark.unit
 class TestOpaqueTokenVerifierCustomClaims:
     """Test OpaqueTokenVerifier with custom claim configurations."""
 
@@ -382,6 +536,20 @@ class TestGoogleTokenVerifier:
         )
         assert verifier.required_scopes == ["openid", "email"]
 
+    def test_has_google_scope_aliases(self):
+        """Test that GoogleTokenVerifier has Google scope aliases configured."""
+        verifier = GoogleTokenVerifier(client_id="test-client-id")
+        assert "email" in verifier._scope_aliases
+        assert "profile" in verifier._scope_aliases
+        assert (
+            "https://www.googleapis.com/auth/userinfo.email"
+            in verifier._scope_aliases["email"]
+        )
+        assert (
+            "https://www.googleapis.com/auth/userinfo.profile"
+            in verifier._scope_aliases["profile"]
+        )
+
     @pytest.mark.asyncio
     async def test_verify_google_token(self):
         """Test verification of a Google token."""
@@ -412,3 +580,37 @@ class TestGoogleTokenVerifier:
                 "https://oauth2.googleapis.com/tokeninfo",
                 params={"access_token": "google-access-token"},
             )
+
+    @pytest.mark.asyncio
+    async def test_verify_google_token_with_full_scope_uris(self):
+        """Test verification with Google's full scope URIs (real tokeninfo response).
+
+        This test simulates the actual Google tokeninfo response format,
+        where scopes are returned as full URIs instead of short names.
+        """
+        verifier = GoogleTokenVerifier(
+            client_id="test-client-id.apps.googleusercontent.com",
+            required_scopes=["openid", "email", "profile"],
+        )
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        # This is what Google's tokeninfo actually returns
+        mock_response.json.return_value = {
+            "aud": "test-client-id.apps.googleusercontent.com",
+            "expires_in": "3600",
+            "scope": "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile",
+            "email": "user@gmail.com",
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_response
+
+        with patch("httpx.AsyncClient") as mock_async_client:
+            mock_async_client.return_value.__aenter__.return_value = mock_client
+
+            result = await verifier.verify_token("google-access-token")
+
+            # Should succeed because GoogleTokenVerifier has scope aliases
+            assert result is not None
+            assert result.client_id == "user@gmail.com"

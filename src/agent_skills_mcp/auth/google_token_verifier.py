@@ -1,12 +1,22 @@
 """OAuth access token verifiers for opaque (non-JWT) tokens."""
 
+import logging
 import time
 
 import httpx
 from fastmcp.server.auth import AccessToken, TokenVerifier
 
+logger = logging.getLogger(__name__)
+
 # Well-known tokeninfo endpoints for major providers
 GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
+
+# Well-known scope aliases (short name -> full scope URIs)
+# Used to map user-friendly scope names to provider-specific full URIs
+GOOGLE_SCOPE_ALIASES: dict[str, list[str]] = {
+    "email": ["https://www.googleapis.com/auth/userinfo.email"],
+    "profile": ["https://www.googleapis.com/auth/userinfo.profile"],
+}
 
 
 class OpaqueTokenVerifier(TokenVerifier):
@@ -31,6 +41,7 @@ class OpaqueTokenVerifier(TokenVerifier):
         scope_claim: str = "scope",
         expiry_claim: str = "expires_in",
         user_id_claims: list[str] | None = None,
+        scope_aliases: dict[str, list[str]] | None = None,
     ):
         """Initialize the opaque token verifier.
 
@@ -43,6 +54,9 @@ class OpaqueTokenVerifier(TokenVerifier):
             scope_claim: Claim name for scopes (default: "scope")
             expiry_claim: Claim name for token expiration in seconds (default: "expires_in")
             user_id_claims: Claim names to try for user ID extraction (default: ["email", "sub"])
+            scope_aliases: Mapping of short scope names to full scope URIs.
+                          Used to match required scopes like "email" to full URIs like
+                          "https://www.googleapis.com/auth/userinfo.email".
         """
         self._tokeninfo_url = tokeninfo_url
         self._client_id = client_id
@@ -52,6 +66,7 @@ class OpaqueTokenVerifier(TokenVerifier):
         self._scope_claim = scope_claim
         self._expiry_claim = expiry_claim
         self._user_id_claims = user_id_claims or ["email", "sub"]
+        self._scope_aliases = scope_aliases or {}
 
     @property
     def required_scopes(self) -> list[str]:
@@ -104,41 +119,83 @@ class OpaqueTokenVerifier(TokenVerifier):
                 )
 
                 if response.status_code != 200:
+                    logger.debug(
+                        "Tokeninfo request failed with status %d", response.status_code
+                    )
                     return None
 
                 data = response.json()
+                logger.debug("Tokeninfo response: %s", data)
 
                 # Verify the token was issued for our client
                 token_client_id = self._extract_client_id(data)
                 if token_client_id != self._client_id:
+                    logger.debug(
+                        "Client ID mismatch: expected '%s', got '%s'",
+                        self._client_id,
+                        token_client_id,
+                    )
                     return None
 
                 # Check token expiration
                 expires_at = self._extract_expiry(data)
                 if expires_at == 0:  # Expired
+                    logger.debug("Token has expired")
                     return None
 
                 # Extract scopes
                 scopes = self._extract_scopes(data)
 
-                # Check required scopes
+                # Check required scopes (with alias support)
                 if self._required_scopes:
                     token_scopes = set(scopes)
-                    required = set(self._required_scopes)
-                    if not required.issubset(token_scopes):
-                        return None
+                    for required_scope in self._required_scopes:
+                        # Check if the required scope is directly present
+                        if required_scope in token_scopes:
+                            continue
+                        # Check if any alias for this scope is present
+                        aliases = self._scope_aliases.get(required_scope, [])
+                        if not any(alias in token_scopes for alias in aliases):
+                            logger.debug(
+                                "Required scope '%s' not found in token scopes: %s "
+                                "(aliases checked: %s)",
+                                required_scope,
+                                token_scopes,
+                                aliases,
+                            )
+                            return None
 
                 # Extract user ID
                 user_id = self._extract_user_id(data)
 
+                # IMPORTANT: Enrich scopes with short names for FastMCP compatibility
+                #
+                # Problem: Some OAuth providers (like Google) return scopes as full URIs
+                # (e.g., "https://www.googleapis.com/auth/userinfo.email"), but FastMCP
+                # may compare these against the short names in required_scopes (e.g., "email").
+                #
+                # Solution: Add short names to AccessToken.scopes so that FastMCP's scope
+                # validation can match both formats. This ensures compatibility without
+                # requiring users to specify full URIs in their configuration.
+                #
+                # This is a workaround for FastMCP's internal scope validation behavior.
+                # If FastMCP changes its validation logic, this may need to be revisited.
+                enriched_scopes = list(scopes)  # Start with original scopes
+                for short_name, aliases in self._scope_aliases.items():
+                    # If any alias is present in the token scopes, add the short name too
+                    if any(alias in scopes for alias in aliases):
+                        if short_name not in enriched_scopes:
+                            enriched_scopes.append(short_name)
+
                 return AccessToken(
                     token=token,
                     client_id=user_id,
-                    scopes=scopes,
+                    scopes=enriched_scopes,
                     expires_at=expires_at,
                 )
 
-        except Exception:
+        except Exception as e:
+            logger.debug("Token verification failed with exception: %s", e)
             return None
 
 
@@ -151,6 +208,10 @@ class GoogleTokenVerifier(OpaqueTokenVerifier):
     Google OAuth access tokens are opaque tokens (not JWTs), so they cannot be
     verified using standard JWT verification. Instead, we use Google's tokeninfo
     endpoint to validate the token and extract claims.
+
+    This verifier includes built-in support for Google's scope aliases:
+    - "email" matches "https://www.googleapis.com/auth/userinfo.email"
+    - "profile" matches "https://www.googleapis.com/auth/userinfo.profile"
     """
 
     def __init__(
@@ -164,7 +225,8 @@ class GoogleTokenVerifier(OpaqueTokenVerifier):
 
         Args:
             client_id: The OAuth client ID (used to verify the token was issued for this app)
-            required_scopes: Optional list of required scopes
+            required_scopes: Optional list of required scopes (supports both short names
+                           like "email" and full URIs)
             timeout_seconds: HTTP request timeout
         """
         super().__init__(
@@ -176,4 +238,6 @@ class GoogleTokenVerifier(OpaqueTokenVerifier):
             # Google uses "scope" for scopes (default)
             # Google uses "expires_in" for expiration (default)
             # Google uses "email" or "sub" for user ID (default)
+            # Google scope aliases for mapping short names to full URIs
+            scope_aliases=GOOGLE_SCOPE_ALIASES,
         )

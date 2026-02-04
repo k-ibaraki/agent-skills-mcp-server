@@ -233,6 +233,53 @@ HTTPトランスポートでOAuth/OIDC認証を有効にできます。**標準O
 - OAuth認証はHTTPトランスポートでのみ動作（stdioは非対応）
 - リフレッシュトークンが必要な場合: `GOOGLE_OAUTH_ACCESS_TYPE=offline`
 
+### スコープエイリアスの仕組み（Google OAuth）
+
+**問題**: GoogleのOAuthは、トークン検証レスポンスで完全なURI形式のスコープを返します：
+```json
+{
+  "scope": "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
+}
+```
+
+しかし、設定ファイルでは短い名前を使用します：
+```bash
+OAUTH_REQUIRED_SCOPES=openid,email,profile
+```
+
+**解決策**: `GoogleTokenVerifier`は自動的にスコープエイリアスを処理します：
+- `email` ↔ `https://www.googleapis.com/auth/userinfo.email`
+- `profile` ↔ `https://www.googleapis.com/auth/userinfo.profile`
+
+これにより、設定ファイルでは短い名前を使用でき、トークン検証時に自動的にマッピングされます。
+
+### 他のOAuthプロバイダーへの対応
+
+Azure ADやOktaなど、他のプロバイダーでスコープ形式の不一致がある場合：
+
+1. **カスタムTokenVerifierを作成**:
+   ```python
+   from agent_skills_mcp.auth import OpaqueTokenVerifier
+
+   AZURE_SCOPE_ALIASES = {
+       "email": ["https://graph.microsoft.com/User.Read"],
+       # 他のエイリアスを追加
+   }
+
+   verifier = OpaqueTokenVerifier(
+       tokeninfo_url="https://...",
+       client_id="your-client-id",
+       required_scopes=["openid", "email"],
+       scope_aliases=AZURE_SCOPE_ALIASES,
+   )
+   ```
+
+2. **`server.py`で使用**:
+   `_create_auth_provider`関数を修正して、Azure AD検出時にカスタムverifierを使用します。
+
+3. **テストを追加**:
+   `tests/test_opaque_token_verifier.py`を参考に、プロバイダー固有のテストを追加します。
+
 ### Transport モード
 
 - **stdio**: Claude Desktop 統合用 (デフォルト)

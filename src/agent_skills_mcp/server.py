@@ -7,7 +7,7 @@ import typer
 from fastmcp import FastMCP
 from fastmcp.server.auth.oidc_proxy import OIDCProxy
 
-from agent_skills_mcp.auth import OpaqueTokenVerifier
+from agent_skills_mcp.auth import GoogleTokenVerifier, OpaqueTokenVerifier
 from agent_skills_mcp.config import get_config
 from agent_skills_mcp.llm_client import LLMClient
 from agent_skills_mcp.skills_manager import SkillsManager
@@ -87,29 +87,49 @@ def _create_auth_provider():
     token_verifier = None
     tokeninfo_url = config.get_oauth_tokeninfo_url()
     if tokeninfo_url:
-        logging.info(
-            f"Using OpaqueTokenVerifier with tokeninfo endpoint: {tokeninfo_url}"
-        )
-        token_verifier = OpaqueTokenVerifier(
-            tokeninfo_url=tokeninfo_url,
-            client_id=config.oauth_client_id,
-            required_scopes=required_scopes,
-        )
+        # Use GoogleTokenVerifier for Google OAuth (includes scope aliases)
+        if "oauth2.googleapis.com" in tokeninfo_url:
+            logging.info(
+                "Using GoogleTokenVerifier with built-in scope aliases "
+                f"for tokeninfo endpoint: {tokeninfo_url}"
+            )
+            token_verifier = GoogleTokenVerifier(
+                client_id=config.oauth_client_id,
+                required_scopes=required_scopes,
+            )
+        else:
+            # Generic OpaqueTokenVerifier for other providers
+            logging.info(
+                f"Using OpaqueTokenVerifier with tokeninfo endpoint: {tokeninfo_url}"
+            )
+            token_verifier = OpaqueTokenVerifier(
+                tokeninfo_url=tokeninfo_url,
+                client_id=config.oauth_client_id,
+                required_scopes=required_scopes,
+            )
 
     # Create OIDCProxy
-    # Note: When using a custom token_verifier, required_scopes must be configured
-    # on the verifier itself, not on OIDCProxy
-    return OIDCProxy(
-        config_url=config.oauth_config_url,
-        client_id=config.oauth_client_id,
-        client_secret=config.oauth_client_secret,
-        base_url=config.oauth_server_base_url,
-        redirect_path=config.oauth_redirect_path,
-        required_scopes=required_scopes if not token_verifier else None,
-        allowed_client_redirect_uris=allowed_uris,
-        extra_authorize_params=extra_params if extra_params else None,
-        token_verifier=token_verifier,
-    )
+    # Note: When using a custom token_verifier, required_scopes must NOT be provided
+    # to OIDCProxy at all - it must be configured on the verifier itself.
+    oidc_kwargs = {
+        "config_url": config.oauth_config_url,
+        "client_id": config.oauth_client_id,
+        "client_secret": config.oauth_client_secret,
+        "base_url": config.oauth_server_base_url,
+        "redirect_path": config.oauth_redirect_path,
+        "allowed_client_redirect_uris": allowed_uris,
+    }
+
+    # Only add required_scopes if NOT using custom token_verifier
+    if not token_verifier:
+        oidc_kwargs["required_scopes"] = required_scopes
+    else:
+        oidc_kwargs["token_verifier"] = token_verifier
+
+    if extra_params:
+        oidc_kwargs["extra_authorize_params"] = extra_params
+
+    return OIDCProxy(**oidc_kwargs)
 
 
 # Initialize FastMCP server
