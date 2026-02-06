@@ -60,3 +60,7 @@ Thumbs.db
 
 # Skills - External MCP Servers (Git管理外)
 skills/notepm-search/
+
+# Community Skills (ユーザー追加スキル、Git管理外)
+community-skills/*
+!community-skills/README.md
