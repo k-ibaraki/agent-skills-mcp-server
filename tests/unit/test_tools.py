@@ -4,9 +4,7 @@ This module tests the functionality of file_read, file_write, shell, and web_fet
 Focuses on normal operation, error handling, and edge cases.
 """
 
-import asyncio
-from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import httpx
 import pytest
@@ -106,7 +104,9 @@ class TestFileRead:
         result = file_read(str(test_file))
         assert result == "Nested content"
 
-    @patch("pathlib.Path.read_text", side_effect=PermissionError("Mock permission denied"))
+    @patch(
+        "pathlib.Path.read_text", side_effect=PermissionError("Mock permission denied")
+    )
     def test_read_permission_error(self, mock_read_text, temp_skills_dir, monkeypatch):
         """Test handling of permission error."""
         monkeypatch.setattr(
@@ -120,7 +120,10 @@ class TestFileRead:
         result = file_read(str(test_file))
         assert "Error: Permission denied" in result
 
-    @patch("pathlib.Path.read_text", side_effect=UnicodeDecodeError("utf-8", b"", 0, 1, "Mock error"))
+    @patch(
+        "pathlib.Path.read_text",
+        side_effect=UnicodeDecodeError("utf-8", b"", 0, 1, "Mock error"),
+    )
     def test_read_unicode_error(self, mock_read_text, temp_skills_dir, monkeypatch):
         """Test handling of Unicode decode error."""
         monkeypatch.setattr(
@@ -154,7 +157,9 @@ class TestFileWrite:
         assert "16 characters" in result
         assert test_file.read_text() == content
 
-    def test_write_overwrite_existing(self, temp_skills_dir, sample_skill_file, monkeypatch):
+    def test_write_overwrite_existing(
+        self, temp_skills_dir, sample_skill_file, monkeypatch
+    ):
         """Test overwriting an existing file."""
         monkeypatch.setattr(
             "agent_skills_mcp.tools.ALLOWED_DIRECTORIES",
@@ -220,8 +225,12 @@ class TestFileWrite:
         assert nested_file.exists()
         assert nested_file.read_text() == "nested"
 
-    @patch("pathlib.Path.write_text", side_effect=PermissionError("Mock permission denied"))
-    def test_write_permission_error(self, mock_write_text, temp_skills_dir, monkeypatch):
+    @patch(
+        "pathlib.Path.write_text", side_effect=PermissionError("Mock permission denied")
+    )
+    def test_write_permission_error(
+        self, mock_write_text, temp_skills_dir, monkeypatch
+    ):
         """Test handling of permission error."""
         monkeypatch.setattr(
             "agent_skills_mcp.tools.ALLOWED_DIRECTORIES",
@@ -369,7 +378,9 @@ class TestWebFetch:
         mock_response.headers = {"content-type": "application/json"}
         mock_response.content = mock_response.text.encode()
 
-        with patch("httpx.AsyncClient.request", return_value=mock_response) as mock_request:
+        with patch(
+            "httpx.AsyncClient.request", return_value=mock_response
+        ) as mock_request:
             result = await web_fetch(
                 "https://api.example.com/create",
                 method="POST",
@@ -391,7 +402,9 @@ class TestWebFetch:
         mock_response.headers = {"content-type": "text/plain"}
         mock_response.content = mock_response.text.encode()
 
-        with patch("httpx.AsyncClient.request", return_value=mock_response) as mock_request:
+        with patch(
+            "httpx.AsyncClient.request", return_value=mock_response
+        ) as mock_request:
             result = await web_fetch(
                 "https://api.example.com/create",
                 method="POST",
@@ -411,7 +424,9 @@ class TestWebFetch:
         mock_response.headers = {"content-type": "text/plain"}
         mock_response.content = mock_response.text.encode()
 
-        with patch("httpx.AsyncClient.request", return_value=mock_response) as mock_request:
+        with patch(
+            "httpx.AsyncClient.request", return_value=mock_response
+        ) as mock_request:
             result = await web_fetch(
                 "https://api.example.com/protected",
                 headers={"Authorization": "Bearer token123"},
@@ -430,7 +445,9 @@ class TestWebFetch:
         mock_response.headers = {"content-type": "text/plain"}
         mock_response.content = mock_response.text.encode()
 
-        with patch("httpx.AsyncClient.request", return_value=mock_response) as mock_request:
+        with patch(
+            "httpx.AsyncClient.request", return_value=mock_response
+        ) as mock_request:
             result = await web_fetch(
                 "https://api.example.com/search",
                 params={"q": "test", "limit": "10"},
@@ -451,7 +468,9 @@ class TestWebFetch:
         mock_response.headers = {"content-type": "text/plain"}
         mock_response.content = mock_response.text.encode()
 
-        with patch("httpx.AsyncClient.request", return_value=mock_response) as mock_request:
+        with patch(
+            "httpx.AsyncClient.request", return_value=mock_response
+        ) as mock_request:
             result = await web_fetch(
                 "https://api.example.com",
                 headers={"Authorization": "Bearer ${API_TOKEN}"},

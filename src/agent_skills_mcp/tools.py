@@ -270,7 +270,9 @@ async def web_fetch(
             except json.JSONDecodeError:
                 request_kwargs["content"] = body
 
-        async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=True) as client:
+        async with httpx.AsyncClient(
+            timeout=timeout_seconds, follow_redirects=True
+        ) as client:
             response = await client.request(**request_kwargs)
             response.raise_for_status()
 
@@ -278,7 +280,9 @@ async def web_fetch(
             content_type = response.headers.get("content-type", "")
 
             # For text-based content types, return truncated text
-            if any(ct in content_type for ct in ["text/html", "application/json", "text/"]):
+            if any(
+                ct in content_type for ct in ["text/html", "application/json", "text/"]
+            ):
                 return _truncate_content(response.text, max_bytes, content_type)
             else:
                 # For binary or unknown content types

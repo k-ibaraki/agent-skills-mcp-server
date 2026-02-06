@@ -45,15 +45,23 @@ class TestValidateLLMConfig:
         """Test that Bedrock model fails without access key."""
         monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "secret123")
         config = Config()
-        with pytest.raises(ValueError, match="AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are required"):
-            config.validate_llm_config("bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0")
+        with pytest.raises(
+            ValueError, match="AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are required"
+        ):
+            config.validate_llm_config(
+                "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0"
+            )
 
     def test_bedrock_model_without_secret_key(self, monkeypatch):
         """Test that Bedrock model fails without secret key."""
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIATEST123")
         config = Config()
-        with pytest.raises(ValueError, match="AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are required"):
-            config.validate_llm_config("bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0")
+        with pytest.raises(
+            ValueError, match="AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are required"
+        ):
+            config.validate_llm_config(
+                "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0"
+            )
 
     def test_bedrock_latest_model(self, monkeypatch):
         """Test validation for latest Bedrock model."""
@@ -74,14 +82,18 @@ class TestValidateLLMConfig:
         """Test that Vertex AI model fails without project."""
         monkeypatch.setenv("VERTEXAI_LOCATION", "us-central1")
         config = Config()
-        with pytest.raises(ValueError, match="VERTEXAI_PROJECT and VERTEXAI_LOCATION are required"):
+        with pytest.raises(
+            ValueError, match="VERTEXAI_PROJECT and VERTEXAI_LOCATION are required"
+        ):
             config.validate_llm_config("vertex_ai/claude-3-5-sonnet-v2@20241022")
 
     def test_vertex_ai_model_without_location(self, monkeypatch):
         """Test that Vertex AI model fails without location."""
         monkeypatch.setenv("VERTEXAI_PROJECT", "my-project")
         config = Config()
-        with pytest.raises(ValueError, match="VERTEXAI_PROJECT and VERTEXAI_LOCATION are required"):
+        with pytest.raises(
+            ValueError, match="VERTEXAI_PROJECT and VERTEXAI_LOCATION are required"
+        ):
             config.validate_llm_config("vertex_ai/claude-3-5-sonnet-v2@20241022")
 
     def test_vertex_ai_claude_latest_model(self, monkeypatch):
@@ -150,7 +162,9 @@ class TestValidateLLMConfig:
 
         # Bedrock models can have multiple slashes in ARN format
         # Should match "bedrock/" prefix
-        config.validate_llm_config("bedrock/arn:aws:bedrock:us-east-1::model/anthropic.claude-3-5-sonnet")
+        config.validate_llm_config(
+            "bedrock/arn:aws:bedrock:us-east-1::model/anthropic.claude-3-5-sonnet"
+        )
 
 
 @pytest.mark.unit

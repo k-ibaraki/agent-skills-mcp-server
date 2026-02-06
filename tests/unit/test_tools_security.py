@@ -7,14 +7,13 @@ This module tests security aspects of file_read, file_write, and shell tools:
 - Timeout enforcement
 """
 
-import os
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from agent_skills_mcp.tools import ALLOWED_DIRECTORIES, _is_path_allowed, file_read, file_write, shell
+from agent_skills_mcp.tools import _is_path_allowed, file_read, file_write, shell
 
 
 @pytest.mark.unit
@@ -53,7 +52,9 @@ class TestPathTraversalPrevention:
         result = file_read("./../../.env")
         assert "Error: Access denied" in result
 
-    def test_allowed_skills_directory_read(self, temp_skills_dir, sample_skill_file, monkeypatch):
+    def test_allowed_skills_directory_read(
+        self, temp_skills_dir, sample_skill_file, monkeypatch
+    ):
         """Test that reading from allowed skills/ directory works."""
         # Patch ALLOWED_DIRECTORIES to use temp directory
         monkeypatch.setattr(
