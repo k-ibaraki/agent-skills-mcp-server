@@ -31,6 +31,10 @@ class Config(BaseSettings):
         default=Path("./skills"),
         description="Directory containing Agent Skills",
     )
+    additional_skills_dirs: str = Field(
+        default="",
+        description="Additional skill directories, comma-separated (e.g., 'community-skills,custom-skills')",
+    )
 
     # LLM configuration
     default_model: str = Field(

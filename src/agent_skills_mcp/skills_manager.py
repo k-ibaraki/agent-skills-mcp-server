@@ -43,6 +43,16 @@ class SkillsManager:
         if not self.skills_directory.exists():
             raise ValueError(f"Skills directory not found: {self.skills_directory}")
 
+        # Collect all skill directories (main + additional from config)
+        self._all_skills_dirs: list[Path] = [self.skills_directory]
+        if self.config.additional_skills_dirs:
+            for dir_str in self.config.additional_skills_dirs.split(","):
+                dir_str = dir_str.strip()
+                if dir_str:
+                    extra_dir = Path(dir_str).resolve()
+                    if extra_dir.exists() and extra_dir not in self._all_skills_dirs:
+                        self._all_skills_dirs.append(extra_dir)
+
         self._vector_store = vector_store
         self._vector_store_initialized = False
 
@@ -100,16 +110,15 @@ class SkillsManager:
         Raises:
             ValueError: If skill not found or invalid.
         """
-        # Find skill directory
-        skill_dir = self.skills_directory / skill_name
-        if not skill_dir.exists() or not skill_dir.is_dir():
-            raise ValueError(f"Skill not found: {skill_name}")
+        # Search across all skill directories
+        for skills_dir in self._all_skills_dirs:
+            skill_dir = skills_dir / skill_name
+            if skill_dir.exists() and skill_dir.is_dir():
+                skill_file = skill_dir / "SKILL.md"
+                if skill_file.exists():
+                    return self._parse_skill_md(skill_file)
 
-        skill_file = skill_dir / "SKILL.md"
-        if not skill_file.exists():
-            raise ValueError(f"SKILL.md not found in: {skill_dir}")
-
-        return self._parse_skill_md(skill_file)
+        raise ValueError(f"Skill not found: {skill_name}")
 
     def search_skills(
         self,
@@ -222,26 +231,32 @@ class SkillsManager:
         ]
 
     def _load_all_skills(self) -> list[Skill]:
-        """Load all valid skills from the skills directory.
+        """Load all valid skills from all skill directories.
 
         Returns:
             List of Skill objects.
         """
         results = []
+        seen_names: set[str] = set()
 
-        for skill_dir in self.skills_directory.iterdir():
-            if not skill_dir.is_dir():
-                continue
+        for skills_dir in self._all_skills_dirs:
+            for skill_dir in skills_dir.iterdir():
+                if not skill_dir.is_dir():
+                    continue
 
-            skill_file = skill_dir / "SKILL.md"
-            if not skill_file.exists():
-                continue
+                skill_file = skill_dir / "SKILL.md"
+                if not skill_file.exists():
+                    continue
 
-            try:
-                skill = self._parse_skill_md(skill_file)
-                results.append(skill)
-            except (ValidationError, ValueError, yaml.YAMLError):
-                continue
+                try:
+                    skill = self._parse_skill_md(skill_file)
+                    # Skip duplicates (first directory wins)
+                    if skill.name in seen_names:
+                        continue
+                    seen_names.add(skill.name)
+                    results.append(skill)
+                except (ValidationError, ValueError, yaml.YAMLError):
+                    continue
 
         return results
 
