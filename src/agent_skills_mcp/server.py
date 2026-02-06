@@ -7,7 +7,11 @@ import typer
 from fastmcp import FastMCP
 from fastmcp.server.auth.oidc_proxy import OIDCProxy
 
-from agent_skills_mcp.auth import GoogleTokenVerifier, OpaqueTokenVerifier
+from agent_skills_mcp.auth import (
+    BearerTokenAuthProvider,
+    GoogleTokenVerifier,
+    OpaqueTokenVerifier,
+)
 from agent_skills_mcp.config import get_config
 from agent_skills_mcp.llm_client import LLMClient
 from agent_skills_mcp.skills_manager import SkillsManager
@@ -57,10 +61,14 @@ def initialize_semantic_search():
 
 
 def _create_auth_provider():
-    """Create OAuth authentication provider based on configuration.
+    """Create authentication provider with Bearer token and OAuth support.
+
+    Supports two authentication methods:
+    1. Bearer token in Authorization header (checked first)
+    2. OAuth flow via OIDCProxy (fallback)
 
     Returns:
-        OIDCProxy | None: OIDCProxy instance if OAuth is enabled, None otherwise.
+        BearerTokenAuthProvider | OIDCProxy | None: Auth provider instance if OAuth is enabled, None otherwise.
 
     Raises:
         ValueError: If OAuth configuration is invalid.
@@ -108,7 +116,7 @@ def _create_auth_provider():
                 required_scopes=required_scopes,
             )
 
-    # Create OIDCProxy
+    # Create OIDCProxy for OAuth flow
     # Note: When using a custom token_verifier, required_scopes must NOT be provided
     # to OIDCProxy at all - it must be configured on the verifier itself.
     oidc_kwargs = {
@@ -129,7 +137,20 @@ def _create_auth_provider():
     if extra_params:
         oidc_kwargs["extra_authorize_params"] = extra_params
 
-    return OIDCProxy(**oidc_kwargs)
+    oidc_proxy = OIDCProxy(**oidc_kwargs)
+
+    # Wrap with BearerTokenAuthProvider if token verifier is available
+    if token_verifier:
+        logging.info(
+            "Enabling Bearer token authentication with OAuth flow fallback"
+        )
+        return BearerTokenAuthProvider(
+            token_verifier=token_verifier,
+            oidc_proxy=oidc_proxy,
+        )
+
+    # Return OIDCProxy directly if no token verifier
+    return oidc_proxy
 
 
 # Initialize FastMCP server
