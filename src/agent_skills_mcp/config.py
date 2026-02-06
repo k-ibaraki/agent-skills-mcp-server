@@ -74,6 +74,25 @@ class Config(BaseSettings):
         description="Logging level (DEBUG, INFO, WARNING, ERROR)",
     )
 
+    # HTTP/Web configuration
+    web_fetch_max_bytes: int = Field(
+        default=100_000,
+        description="Maximum response size for web_fetch tool (bytes)",
+        ge=1024,
+    )
+    web_fetch_timeout: float = Field(
+        default=30.0,
+        description="HTTP request timeout (seconds)",
+        ge=1.0,
+        le=300.0,
+    )
+    shell_timeout: int = Field(
+        default=30,
+        description="Shell command execution timeout (seconds)",
+        ge=1,
+        le=600,
+    )
+
     # RAG / Semantic Search configuration
     embedding_model: str = Field(
         default="paraphrase-multilingual-MiniLM-L12-v2",
