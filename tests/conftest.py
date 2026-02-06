@@ -1,8 +1,56 @@
 """Pytest configuration and fixtures for tests."""
 
 import os
+from pathlib import Path
 
 import pytest
+
+
+@pytest.fixture
+def temp_skills_dir(tmp_path):
+    """Create a temporary skills directory for testing.
+
+    Args:
+        tmp_path: Pytest's temporary directory fixture.
+
+    Returns:
+        Path to the temporary skills directory.
+    """
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir()
+    return skills_dir
+
+
+@pytest.fixture
+def temp_tmp_dir(tmp_path):
+    """Create a temporary .tmp directory for testing.
+
+    Args:
+        tmp_path: Pytest's temporary directory fixture.
+
+    Returns:
+        Path to the temporary .tmp directory.
+    """
+    tmp_dir = tmp_path / ".tmp"
+    tmp_dir.mkdir()
+    return tmp_dir
+
+
+@pytest.fixture
+def sample_skill_file(temp_skills_dir):
+    """Create a sample skill file for testing.
+
+    Args:
+        temp_skills_dir: Temporary skills directory fixture.
+
+    Returns:
+        Path to the created sample skill file.
+    """
+    skill_dir = temp_skills_dir / "test-skill"
+    skill_dir.mkdir()
+    skill_file = skill_dir / "test.txt"
+    skill_file.write_text("Sample skill content")
+    return skill_file
 
 
 @pytest.fixture(autouse=True)
