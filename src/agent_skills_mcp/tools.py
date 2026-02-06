@@ -11,6 +11,8 @@ from pathlib import Path
 import httpx
 from strands import tool
 
+from agent_skills_mcp.config import get_config
+
 logger = logging.getLogger(__name__)
 
 # Allowed directories for file operations (security restriction)
@@ -127,13 +129,16 @@ def shell(command: str) -> str:
     """
     import subprocess
 
+    config = get_config()
+    timeout = config.shell_timeout
+
     try:
         result = subprocess.run(
             command,
             shell=True,
             capture_output=True,
             text=True,
-            timeout=30,  # 30 second timeout
+            timeout=timeout,
         )
 
         output = result.stdout
@@ -146,7 +151,7 @@ def shell(command: str) -> str:
         return output if output else "(no output)"
 
     except subprocess.TimeoutExpired:
-        return "Error: Command timed out after 30 seconds"
+        return f"Error: Command timed out after {timeout} seconds"
     except Exception as e:
         logger.error(f"shell command failed: {e}")
         return f"Error executing command: {e}"
@@ -203,6 +208,10 @@ async def web_fetch(
     import os
     import re
 
+    config = get_config()
+    max_bytes = config.web_fetch_max_bytes
+    timeout_seconds = config.web_fetch_timeout
+
     try:
         # Debug logging
         logger.debug(f"web_fetch called with url={url}, headers={headers}")
@@ -241,7 +250,7 @@ async def web_fetch(
             except json.JSONDecodeError:
                 request_kwargs["content"] = body
 
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=True) as client:
             response = await client.request(**request_kwargs)
             response.raise_for_status()
 
@@ -252,18 +261,18 @@ async def web_fetch(
             if "text/html" in content_type:
                 content = response.text
                 # Limit content size to prevent excessive memory usage
-                if len(content) > 100000:
-                    content = content[:100000] + "\n... (content truncated at 100KB)"
+                if len(content) > max_bytes:
+                    content = content[:max_bytes] + f"\n... (content truncated at {max_bytes // 1000}KB)"
                 return content
             elif "application/json" in content_type:
                 content = response.text
-                if len(content) > 100000:
-                    content = content[:100000] + "\n... (content truncated at 100KB)"
+                if len(content) > max_bytes:
+                    content = content[:max_bytes] + f"\n... (content truncated at {max_bytes // 1000}KB)"
                 return content
             elif "text/" in content_type:
                 content = response.text
-                if len(content) > 100000:
-                    content = content[:100000] + "\n... (content truncated at 100KB)"
+                if len(content) > max_bytes:
+                    content = content[:max_bytes] + f"\n... (content truncated at {max_bytes // 1000}KB)"
                 return content
             else:
                 return f"Content type {content_type} received. Size: {len(response.content)} bytes"
