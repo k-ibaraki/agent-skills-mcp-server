@@ -157,6 +157,26 @@ def shell(command: str) -> str:
         return f"Error executing command: {e}"
 
 
+def _truncate_content(content: str, max_bytes: int, content_type: str) -> str:
+    """Truncate content if it exceeds max size.
+
+    Args:
+        content: Content to potentially truncate.
+        max_bytes: Maximum allowed bytes.
+        content_type: Content type for logging.
+
+    Returns:
+        Original content if within limit, truncated content otherwise.
+    """
+    if len(content) <= max_bytes:
+        return content
+
+    logger.debug(
+        f"Truncating {content_type} response from {len(content)} to {max_bytes} bytes"
+    )
+    return content[:max_bytes] + f"\n... (content truncated at {max_bytes // 1000}KB)"
+
+
 @tool
 async def web_fetch(
     url: str,
@@ -257,24 +277,11 @@ async def web_fetch(
             # Get content type
             content_type = response.headers.get("content-type", "")
 
-            # For HTML, return text content with size limit
-            if "text/html" in content_type:
-                content = response.text
-                # Limit content size to prevent excessive memory usage
-                if len(content) > max_bytes:
-                    content = content[:max_bytes] + f"\n... (content truncated at {max_bytes // 1000}KB)"
-                return content
-            elif "application/json" in content_type:
-                content = response.text
-                if len(content) > max_bytes:
-                    content = content[:max_bytes] + f"\n... (content truncated at {max_bytes // 1000}KB)"
-                return content
-            elif "text/" in content_type:
-                content = response.text
-                if len(content) > max_bytes:
-                    content = content[:max_bytes] + f"\n... (content truncated at {max_bytes // 1000}KB)"
-                return content
+            # For text-based content types, return truncated text
+            if any(ct in content_type for ct in ["text/html", "application/json", "text/"]):
+                return _truncate_content(response.text, max_bytes, content_type)
             else:
+                # For binary or unknown content types
                 return f"Content type {content_type} received. Size: {len(response.content)} bytes"
 
     except httpx.TimeoutException:
