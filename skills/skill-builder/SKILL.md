@@ -67,19 +67,49 @@ allowed_tools: file_write,file_read,web_fetch
 
 ### 3. web_fetch 使用時のベストプラクティス
 
+**CRITICAL: 具体的な実装を必ず含める**
+
+web_fetch を使用するスキルでは、以下を**必ず**記載すること：
+
+1. **具体的なAPIエンドポイントURL**
+   - ❌ 悪い: "気象庁APIを使用"
+   - ✅ 良い: `https://www.jma.go.jp/bosai/forecast/data/forecast/130000.json`
+
+2. **実装手順を具体的に**
+   ```
+   1. web_fetch("https://api.example.com/data")
+   2. JSONレスポンスから必要なフィールドを抽出
+   3. ユーザー向けにフォーマット
+   ```
+
+3. **期待されるレスポンス例を含める**
+   ```json
+   {
+     "data": {
+       "temperature": 15,
+       "weather": "晴れ"
+     }
+   }
+   ```
+
 **データソースの選択順**:
 1. **公式API**: JSON/XMLエンドポイント（最優先）
+   - 実在するAPIのみを記載（架空のAPIは禁止）
+   - テスト可能なエンドポイントURLを明記
 2. **静的HTML**: サーバー側レンダリングページ
+   - JavaScriptなしで表示されることを確認
 3. **代替手段**: データ取得失敗時の対処法を必ず含める
+   - 公式サイトURLを案内
 
 **例（天気情報）**:
 - ✅ 良い: 気象庁API `https://www.jma.go.jp/bosai/forecast/data/forecast/{code}.json`
 - ❌ 悪い: Yahoo天気（JavaScript動的読み込み）
+- ❌ 悪い: "気象庁の花粉API"（実在しない架空のAPI）
 
 **エラーハンドリング**:
 - データ取得失敗時、ユーザーに公式URLを案内
 - 簡潔なエラーメッセージ（長い技術的説明は不要）
-- 代替データソースを提案
+- 代替データソースを提案（実在するサイトのみ）
 
 ### 4. フォーマット遵守
 
@@ -91,8 +121,16 @@ allowed_tools: file_write,file_read,web_fetch
 
 1. **要件理解**: ユーザーの要求を分析
 2. **参考確認**: 必要に応じて weather-forecast を file_read で確認
-3. **SKILL.md生成**: file_write で managed-skills/{skill_name}/SKILL.md を作成
-4. **完了報告**: 生成したスキルのパスと概要を報告
+3. **データソース検証**（web_fetch使用時のみ）:
+   - 具体的なAPIエンドポイントURLを特定
+   - 静的HTML/JSONであることを確認（JavaScript動的ページは不可）
+   - テスト可能な実在するURLのみを記載
+   - 架空のAPIや未確認のエンドポイントは記載しない
+4. **SKILL.md生成**: file_write で managed-skills/{skill_name}/SKILL.md を作成
+   - **重要**: web_fetch使用時は具体的なURLを「使用方法」セクションに明記
+   - 実装手順を番号付きリストで具体的に記載
+   - 期待されるレスポンス例を含める（JSON/HTML構造）
+5. **完了報告**: 生成したスキルのパスと概要を報告
 
 ## SKILL.mdのテンプレート構造
 
@@ -123,9 +161,35 @@ allowed_tools: web_fetch,file_read  # オプション、必要な場合のみ（
 
 {使用するツールとその用途}
 
+### APIエンドポイント（web_fetch使用時は必須）
+
+**CRITICAL: web_fetch使用時は具体的なURLを必ず記載**
+
+```
+https://api.example.com/endpoint/{parameter}
+```
+
+**パラメータ**:
+- {parameter}: 説明と例
+
+**レスポンス例**:
+```json
+{
+  "data": {
+    "field1": "value1",
+    "field2": "value2"
+  }
+}
+```
+
+**実装手順**:
+1. web_fetch で上記URLにアクセス
+2. JSONレスポンスから `data.field1` と `data.field2` を抽出
+3. ユーザー向けにフォーマットして出力
+
 ### {その他の必要な情報}
 
-{API、コマンド、設定など}
+{コマンド、設定など}
 
 ## 実行例
 
@@ -353,9 +417,21 @@ https://www.jma.go.jp/bosai/forecast/data/forecast/{area_code}.json
 
 **処理**:
 1. 地域コード決定（東京 = 130000）
-2. web_fetch でAPI呼び出し
+2. web_fetch("https://www.jma.go.jp/bosai/forecast/data/forecast/130000.json")
 3. JSONレスポンスを解析
-4. 天気情報を抽出
+   ```json
+   {
+     "timeSeries": [{
+       "timeDefines": ["2024-02-15T..."],
+       "areas": [{
+         "area": {"name": "東京地方"},
+         "weathers": ["晴れ"],
+         "temps": ["15"]
+       }]
+     }]
+   }
+   ```
+4. `timeSeries[0].areas[0]` から天気と気温を抽出
 
 **出力**:
 ```
@@ -397,16 +473,42 @@ https://www.jma.go.jp/bosai/forecast/data/forecast/{area_code}.json
    - managed-skills/ ディレクトリが存在するか確認
    - パスが正しいか確認（managed-skills/{skill-name}/SKILL.md）
 
-4. **web_fetch データ取得失敗**（重要）
-   - ❌ 原因: JavaScript動的読み込みページ（React, Vue, SPAなど）
-   - ✅ 対策: 公式APIエンドポイントを使用
-   - 例: Yahoo天気（動的）→ 気象庁API（JSON）
-   - エラー時: ユーザーに公式URLを案内（簡潔に）
+4. **web_fetch データ取得失敗**（最も重要）
+
+   **問題**: 生成されたスキルが動作しない
+
+   **原因**:
+   - ❌ JavaScript動的読み込みページを指定（React, Vue, SPAなど）
+   - ❌ 架空のAPIエンドポイントを記載（例: "気象庁の花粉API"は存在しない）
+   - ❌ 具体的なURLを記載せず曖昧な説明のみ（例: "気象情報サイトから取得"）
+
+   **必須対策**:
+   - ✅ 実在する公式APIエンドポイントURLを明記
+   - ✅ 静的HTML/JSONのみを使用（JavaScript不要）
+   - ✅ 具体的な実装手順を番号付きで記載
+   - ✅ 期待されるレスポンス例を含める
+
+   **良い例**:
+   ```
+   ### APIエンドポイント
+   https://www.jma.go.jp/bosai/forecast/data/forecast/130000.json
+
+   ### 実装手順
+   1. web_fetch で上記URLにアクセス
+   2. JSONレスポンスから timeSeries[0].areas[0] を取得
+   3. weathers フィールドから天気情報を抽出
+   ```
+
+   **悪い例**:
+   ```
+   気象庁の花粉APIから花粉情報を取得します。
+   （具体的なURLなし、APIも実在しない）
+   ```
 
 5. **生成されたスキルの品質が低い**
-   - weather-forecast を参考に確認
+   - weather-forecast を file_read で参考に確認
    - 実行例が具体的で分かりやすいか確認
-   - web_fetch使用時はAPIエンドポイントを優先
+   - web_fetch使用時は必ずURLとレスポンス例を含める
 
 ## 注意事項
 
