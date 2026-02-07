@@ -49,7 +49,9 @@ def file_read(path: str) -> str:
     """Read contents from a file.
 
     For security, only files within allowed directories can be read:
-    - skills/ (skill files)
+    - skills/ (official skills)
+    - community-skills/ (user-added skills)
+    - managed-skills/ (MCP-managed skills)
     - .tmp/ (temporary files)
 
     Args:

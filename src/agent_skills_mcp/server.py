@@ -348,7 +348,7 @@ async def skills_manage(
             return {
                 "operation": operation,
                 "skill_name": skill_name,
-                "response": f"Error: Skill '{skill_name}' not found in managed-skills/.",
+                "response": f"Error: Skill '{skill_name}' not found in managed-skills/{config.managed_skills_user}/.",
                 "model": "",
                 "input_tokens": 0,
                 "output_tokens": 0,
@@ -370,7 +370,7 @@ async def skills_manage(
             return {
                 "operation": operation,
                 "skill_name": skill_name,
-                "response": f"Successfully deleted skill '{skill_name}' from managed-skills/.",
+                "response": f"Successfully deleted skill '{skill_name}' from managed-skills/{config.managed_skills_user}/.",
                 "model": "",
                 "input_tokens": 0,
                 "output_tokens": 0,
@@ -436,7 +436,7 @@ async def skills_manage(
         return {
             "operation": operation,
             "skill_name": skill_name,
-            "response": f"Error: Skill '{skill_name}' already exists in managed-skills/. Use operation='update' to modify it.",
+            "response": f"Error: Skill '{skill_name}' already exists in managed-skills/{config.managed_skills_user}/. Use operation='update' to modify it.",
             "model": "",
             "input_tokens": 0,
             "output_tokens": 0,
@@ -449,7 +449,7 @@ async def skills_manage(
         return {
             "operation": operation,
             "skill_name": skill_name,
-            "response": f"Error: Skill '{skill_name}' not found in managed-skills/. Use operation='create' to create it.",
+            "response": f"Error: Skill '{skill_name}' not found in managed-skills/{config.managed_skills_user}/. Use operation='create' to create it.",
             "model": "",
             "input_tokens": 0,
             "output_tokens": 0,
