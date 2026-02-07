@@ -61,6 +61,12 @@ Thumbs.db
 # Skills - External MCP Servers (Git管理外)
 skills/notepm-search/
 
+# Backup of Anthropic's original skill-creator (for reference only)
+skills/skill-creator-original/
+
 # Community Skills (ユーザー追加スキル、Git管理外)
 community-skills/*
 !community-skills/README.md
+
+# Managed skills (created by skills_manage tool)
+managed-skills/

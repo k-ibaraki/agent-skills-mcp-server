@@ -119,6 +119,20 @@ class Config(BaseSettings):
         le=1.0,
     )
 
+    # Skill Creation/Management configuration
+    skills_creation_enabled: bool = Field(
+        default=True,
+        description="Enable skill creation/management via skills_manage tool",
+    )
+    managed_skills_user: str = Field(
+        default="default",
+        description="Subdirectory name for managed skills (e.g., 'default' or user ID)",
+    )
+    skill_builder_model: str = Field(
+        default="anthropic/claude-sonnet-4-5-20250929",
+        description="LLM model for skill-builder execution (requires high-performance model)",
+    )
+
     # OIDC/OAuth authentication configuration (HTTP transport only)
     oauth_enabled: bool = Field(
         default=False,

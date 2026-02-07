@@ -17,6 +17,67 @@ Agent Skills を MCP サーバー経由で管理・実行するシステムで�
 
 1. **skills-search**: スキル検索 (セマンティック検索対応、name/description で検索、メタデータ含む)
 2. **skills-execute**: スキル実行 (LLM にスキルコンテキスト注入して実行)
+3. **skills-manage**: スキル管理 (スキルの作成・更新・削除、skill-builder を内部で使用)
+
+### スキル管理 (skills-manage)
+
+`skills-manage` ツールは、skill-builder を内部で使用して、Agent Skills を動的に作成・更新・削除します。
+
+**推奨ワークフロー**:
+1. **skills-search** で必要なスキルを検索
+2. 見つからない場合、**skills-manage** で新しいスキルを作成
+3. 作成後、**skills-execute** で実行
+
+**パラメータ**:
+- `operation`: 操作タイプ ("create", "update", "delete")
+- `skill_name`: スキル名 (kebab-case、例: "my-new-skill")
+- `purpose`: スキルの目的 (create/update時に必須)
+- `detailed_requirements`: 詳細要件 (create/update時に必須)
+- `allowed_tools`: 使用可能ツール (オプション、カンマ区切り)
+- `metadata`: メタデータ (オプション、JSONオブジェクト)
+
+**ディレクトリ構造**:
+- `skills/` - 公式スキル (Git管理、読み取り専用)
+- `community-skills/` - ユーザー手動追加スキル (Git管理外、読み取り専用)
+- `managed-skills/{user}/` - **MCPツール管理スキル** (Git管理外、読み書き可能)
+  - デフォルトは `managed-skills/default/`
+  - 環境変数 `MANAGED_SKILLS_USER` で変更可能（将来的なマルチユーザー対応）
+
+**セキュリティ**:
+- managed-skills/{user}/ 内のスキルのみ作成・更新・削除可能
+- skills/ および community-skills/ は完全保護
+- 環境変数 `SKILLS_CREATION_ENABLED=false` で機能を無効化可能
+- 既存スキルの自動マイグレーション: 初回起動時に managed-skills/ 直下のスキルを managed-skills/default/ に移動
+
+**モデル設定**:
+- スキル生成（skills_manage）: `SKILL_BUILDER_MODEL`（デフォルト: claude-sonnet-4-5）
+- スキル実行（skills_execute）: `DEFAULT_MODEL`（任意のモデル）
+- スキル生成は複雑なタスクのため、高性能モデル（Sonnet以上）を推奨
+
+**使用例**:
+```python
+# スキル作成
+await skills_manage(
+    operation="create",
+    skill_name="my-greeter",
+    purpose="ユーザーに挨拶するシンプルなスキル",
+    detailed_requirements="名前を受け取り、パーソナライズされた挨拶を返す",
+)
+
+# スキル更新
+await skills_manage(
+    operation="update",
+    skill_name="my-greeter",
+    purpose="時間帯別の挨拶スキル",
+    detailed_requirements="名前と時間帯を受け取り、適切な挨拶を返す",
+)
+
+# スキル削除
+await skills_manage(
+    operation="delete",
+    skill_name="my-greeter",
+)
+```
 
 ### セマンティック検索 (RAG)
 
@@ -61,7 +122,9 @@ SEMANTIC_SEARCH_THRESHOLD=0.3  # 最小類似度しきい値 (0-1)
 
 セキュリティのため、`file_read` と `file_write` は以下のディレクトリ内のファイルのみアクセス可能です：
 
-- `skills/` - スキルファイル
+- `skills/` - 公式スキル
+- `community-skills/` - ユーザー手動追加スキル
+- `managed-skills/` - MCPツール管理スキル
 - `.tmp/` - 一時ファイル
 
 これらのディレクトリ外へのアクセスは拒否されます。これにより、スキルが意図しない場所のファイルを読み書きすることを防ぎます。
@@ -144,7 +207,10 @@ if not skill_file.exists():
 
 ### スキル管理
 
-- スキルは `skills/` ディレクトリに配置
+- **3つのスキルディレクトリ**:
+  - `skills/` - 公式スキル (Git管理、手動配置)
+  - `community-skills/` - ユーザー追加スキル (手動配置)
+  - `managed-skills/{user}/` - MCPツール管理スキル (動的作成、デフォルト: `default/`)
 - 各スキルディレクトリに `SKILL.md` が必須
 - YAML frontmatter + Markdown body の形式
 - スキル名は kebab-case (例: `example-skill`)
@@ -380,6 +446,18 @@ mypy または pyright を使用した型チェックを検討。
 - FastMCP のデコレータ構文確認 (`@mcp.tool()`)
 - サーバー起動方法確認 (stdio vs http)
 - Claude Desktop 設定ファイル確認
+
+### skills_manage でタイムアウトが発生する
+
+`skills_manage` ツールは内部で skill-builder を実行してSKILL.mdを生成します。複雑なスキルの場合、LLM処理に時間がかかりタイムアウトする可能性があります。
+
+**対策:**
+- MCPクライアント（Claude Desktop等）のタイムアウト設定を確認
+- より高速なモデルを使用（例: `DEFAULT_MODEL=vertex_ai/claude-sonnet-4-5@20250929`）
+- `detailed_requirements` をより簡潔に記述（skill-builder が理解できる最小限の情報で十分）
+- 複雑なスキルは手動で作成し、community-skills/ に配置することも検討
+
+**注意:** MCPクライアント側のタイムアウト（通常2分）は、サーバー側では制御できません。
 
 ### デバッグ用詳細ログを有効にしたい
 

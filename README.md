@@ -4,7 +4,7 @@ MCP (Model Context Protocol) サーバーを使って Agent Skills を管理・�
 
 ## 特徴
 
-- **2つのMCPツール**: スキル検索と実行機能を提供
+- **3つのMCPツール**: スキル検索、実行、管理機能を提供
 - **セマンティック検索**: ChromaDB + sentence-transformers による高精度な多言語スキル検索（日本語含む50+言語対応）
 - **マルチプロバイダー対応**: Anthropic API、AWS Bedrock、Google Vertex AI に対応（Strands Agents + LiteLLM経由）
 - **Transport柔軟性**: STDIO（Claude Desktop統合）とHTTPの両方をサポート
@@ -272,6 +272,45 @@ SEMANTIC_SEARCH_THRESHOLD=0.3  # 最小類似度しきい値（デフォルト: 
 
 **注意**: 使用するモデルはサーバーの環境変数`DEFAULT_MODEL`で設定します。
 
+### 3. `skills-manage`
+
+スキルを動的に作成・更新・削除します。内部でskill-builderスキルを使用してSKILL.mdファイルを生成します。
+
+**パラメータ**:
+- `operation` (required): 操作タイプ ("create", "update", "delete")
+- `skill_name` (required): スキル名（kebab-case、例: "my-new-skill"）
+- `purpose` (optional): スキルの目的（create/update時に必須）
+- `detailed_requirements` (optional): 詳細要件（create/update時に必須）
+- `allowed_tools` (optional): 使用可能なツール（カンマ区切り）
+- `metadata` (optional): メタデータ（JSONオブジェクト）
+
+**ディレクトリ構造**:
+- `skills/` - 公式スキル（Git管理、読み取り専用）
+- `community-skills/` - ユーザー手動追加スキル（Git管理外、読み取り専用）
+- `managed-skills/{user}/` - MCPツール管理スキル（Git管理外、読み書き可能）
+  - デフォルト: `managed-skills/default/`
+  - 環境変数 `MANAGED_SKILLS_USER` で変更可能
+
+**セキュリティ**:
+- managed-skills/{user}/ 内のスキルのみ作成・更新・削除可能
+- skills/ および community-skills/ は完全保護
+- 環境変数 `SKILLS_CREATION_ENABLED=false` で機能を無効化可能
+
+**自動スキル作成**:
+skills-search のスコアが0.5未満の場合、システムが自動的に新しいスキルの作成を提案します。
+
+**設定** (`.env`):
+```bash
+SKILLS_CREATION_ENABLED=true  # スキル管理機能の有効/無効（デフォルト: 有効）
+MANAGED_SKILLS_USER=default   # サブディレクトリ名（デフォルト: "default"）
+
+# skill-builder実行用のモデル（デフォルト: claude-sonnet-4-5）
+# スキル生成には高性能モデルを推奨（通常のスキル実行とは別に設定可能）
+SKILL_BUILDER_MODEL=anthropic/claude-sonnet-4-5-20250929
+```
+
+**重要**: スキル生成は複雑なタスクのため、`SKILL_BUILDER_MODEL`にはSonnet以上の高性能モデルの使用を推奨します。通常のスキル実行（`skills_execute`）は`DEFAULT_MODEL`で制御され、Haikuなど軽量モデルでも動作します。
+
 ## スキル実行で使用可能なツール
 
 `skills-execute` で実行されるスキル内から、以下のツールを使用できます：
@@ -307,15 +346,29 @@ web_fetch を使って https://example.com からデータを取得してくだ�
 
 ## スキルの作成
 
-スキルは `skills/` ディレクトリ内に配置します。
+スキルは以下の3つの場所に配置できます：
 
 ### ディレクトリ構造
 
 ```
+# 公式スキル（Git管理、手動配置）
 skills/
 └── your-skill-name/
     └── SKILL.md
+
+# ユーザー追加スキル（手動配置）
+community-skills/
+└── your-skill-name/
+    └── SKILL.md
+
+# MCPツール管理スキル（skills-manage で自動作成）
+managed-skills/
+└── default/              # または {user-id}
+    └── your-skill-name/
+        └── SKILL.md
 ```
+
+**推奨**: 新しいスキルは `skills-manage` ツールで作成することを推奨します。手動作成する場合は、開発中のスキルを `skills/` または `community-skills/` に配置してください。
 
 ### SKILL.md フォーマット
 
@@ -473,6 +526,7 @@ uv run pytest
 │  ┌──────────────────┐   │
 │  │ skills-search    │   │
 │  │ skills-execute   │   │
+│  │ skills-manage    │   │
 │  └──────────────────┘   │
 └────┬─────────────┬──────┘
      │             │
@@ -484,11 +538,13 @@ uv run pytest
               └─────┬─────────┘
      │              │
      ▼              ▼
-┌──────────┐  ┌──────────────┐
-│ skills/  │  │ Anthropic    │
-│ (SKILL.md│  │ Bedrock      │
-│  files)  │  │ Vertex AI    │
-└──────────┘  └──────────────┘
+┌──────────────┐  ┌──────────────┐
+│ skills/      │  │ Anthropic    │
+│ community-   │  │ Bedrock      │
+│ skills/      │  │ Vertex AI    │
+│ managed-     │  │              │
+│ skills/{user}│  │              │
+└──────────────┘  └──────────────┘
 ```
 
 ## トラブルシューティング
@@ -522,6 +578,18 @@ uv run pytest
   - 例（Google Cloud Consoleの場合）: `http://localhost:8080/auth/callback`
   - プロバイダーによって設定画面が異なります
 - ログレベルを `DEBUG` に設定して詳細なログを確認: `.env` に `LOG_LEVEL=DEBUG` を追加
+
+### skills-manage が使用できない
+
+- `.env` ファイルで `SKILLS_CREATION_ENABLED=true` が設定されているか確認（デフォルト: 有効）
+- skill-builder スキルが存在するか確認: `skills/skill-builder/SKILL.md`
+- 既存スキルの更新・削除は managed-skills/{user}/ 内のスキルのみ可能（skills/ と community-skills/ は保護されています）
+
+### スキル作成がタイムアウトする
+
+- skill-builder スキルは軽量化されていますが、複雑なスキルの生成には時間がかかることがあります
+- `detailed_requirements` を簡潔にすることでタイムアウトを回避できます
+- LLMモデルを高速なモデル（例: claude-3-5-haiku）に変更することも検討してください
 
 ## ライセンス
 

@@ -17,6 +17,9 @@ from agent_skills_mcp.llm_client import LLMClient
 from agent_skills_mcp.skills_manager import SkillsManager
 from agent_skills_mcp.vector_store import VectorStore
 
+# Logging
+logger = logging.getLogger(__name__)
+
 # Typer app
 app = typer.Typer()
 
@@ -141,9 +144,7 @@ def _create_auth_provider():
 
     # Wrap with BearerTokenAuthProvider if token verifier is available
     if token_verifier:
-        logging.info(
-            "Enabling Bearer token authentication with OAuth flow fallback"
-        )
+        logging.info("Enabling Bearer token authentication with OAuth flow fallback")
         return BearerTokenAuthProvider(
             token_verifier=token_verifier,
             oidc_proxy=oidc_proxy,
@@ -154,7 +155,27 @@ def _create_auth_provider():
 
 
 # Initialize FastMCP server
-mcp = FastMCP("agent-skills-mcp-server", auth=_create_auth_provider())
+mcp = FastMCP(
+    "agent-skills-mcp-server",
+    auth=_create_auth_provider(),
+    instructions="""Agent Skills - Proactive Skill Creation
+
+Workflow:
+1. Search: skills_search for relevant skills
+2. Evaluate search results:
+   - Score < 0.5 → CREATE new skill immediately
+   - Score ≥ 0.5 → TRY executing with skills_execute
+3. Evaluate execution results:
+   - Result is insufficient/wrong/incomplete → CREATE new skill
+   - Result is good → Done
+4. Create WITHOUT asking: skills_manage(create) immediately when needed
+
+Examples:
+A) Low score: "花粉情報" → weather-forecast (0.3) → CREATE pollen-forecast → execute
+B) Try first: "天気" → weather-forecast (0.8) → execute → insufficient detail → CREATE detailed-weather → execute
+
+Be proactive - create new skills when search OR execution results are insufficient.""",
+)
 
 # Initialize managers
 skills_manager = SkillsManager()
@@ -167,18 +188,21 @@ async def skills_search(
     name_filter: str | None = None,
     limit: int | None = None,
 ) -> list[dict]:
-    """Search for Agent Skills by description or name.
+    """Search for Agent Skills by semantic matching. Returns skills with relevance scores (0-1).
 
-    Uses semantic search for better relevance matching.
-    Results are filtered by similarity threshold and include relevance scores.
+    Score Guide:
+    - ≥0.5: Use existing skill
+    - <0.5 or 0 results: Create new skill with skills_manage
+
+    Create new when: Low score, missing features, or doesn't match requirements.
 
     Args:
-        query: Search query for skill descriptions (semantic search).
-        name_filter: Filter by skill name prefix.
-        limit: Maximum number of results to return (default: 10).
+        query: Search query for descriptions (semantic).
+        name_filter: Filter by name prefix.
+        limit: Max results (default: 10).
 
     Returns:
-        List of matching skills with metadata and relevance score.
+        List with metadata and score. Low score → create new skill.
     """
     results = skills_manager.search_skills(
         query=query, name_filter=name_filter, limit=limit
@@ -199,6 +223,9 @@ async def skills_execute(
     user_prompt: str,
 ) -> dict:
     """Execute an Agent Skill with the LLM.
+
+    After execution, evaluate if the result meets user requirements.
+    If insufficient, create a new skill with skills_manage.
 
     Args:
         skill_name: Name of the skill to execute.
@@ -222,6 +249,276 @@ async def skills_execute(
         "output_tokens": result.output_tokens,
         "execution_time": result.execution_time,
     }
+
+
+@mcp.tool()
+async def skills_manage(
+    operation: str,
+    skill_name: str,
+    purpose: str | None = None,
+    detailed_requirements: str | None = None,
+    allowed_tools: str | None = None,
+    metadata: dict | None = None,
+) -> dict:
+    """Manage Agent Skills (create, update, delete).
+
+    Use this tool when skills_search returns no results and you need to create
+    a custom skill for the user's specific requirements.
+
+    This tool provides unified skill management using the skill-builder.
+    Skills are stored in the managed-skills/ directory, separate from
+    official and community skills.
+
+    Args:
+        operation: Operation to perform ("create", "update", or "delete").
+        skill_name: Name of the skill in kebab-case (e.g., "my-new-skill").
+        purpose: Brief description of the skill's purpose (required for create/update).
+        detailed_requirements: Detailed requirements (required for create/update):
+            - What the skill should do
+            - Expected inputs and outputs
+            - Specific workflows or patterns
+            - Tools needed (web_fetch, file_read, shell, etc.)
+        allowed_tools: Optional comma-separated list of tools (e.g., "web_fetch,file_read").
+        metadata: Optional metadata dict (e.g., {"author": "...", "version": "1.0"}).
+
+    Returns:
+        Dict with operation result:
+        - operation: Operation performed
+        - skill_name: Name of the skill
+        - response: Result message or error
+        - model: Model used (for create/update)
+        - input_tokens, output_tokens: Token usage (for create/update)
+        - execution_time: Time taken
+        - skill_path: Path to the skill directory
+
+    Raises:
+        ValueError: If operation is invalid or skill-builder is not available.
+    """
+    import re
+    import shutil
+    from pathlib import Path
+
+    config = get_config()
+
+    # Check if skill creation is enabled
+    if not config.skills_creation_enabled:
+        return {
+            "operation": operation,
+            "skill_name": skill_name,
+            "response": "Error: Skill management is disabled. Set SKILLS_CREATION_ENABLED=true to enable.",
+            "model": "",
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "execution_time": 0.0,
+            "skill_path": None,
+        }
+
+    # Validate operation
+    valid_operations = ["create", "update", "delete"]
+    if operation not in valid_operations:
+        return {
+            "operation": operation,
+            "skill_name": skill_name,
+            "response": f"Error: Invalid operation '{operation}'. Must be one of: {', '.join(valid_operations)}.",
+            "model": "",
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "execution_time": 0.0,
+            "skill_path": None,
+        }
+
+    # Validate skill_name format (kebab-case)
+    if not re.match(r"^[a-z0-9]+(-[a-z0-9]+)*$", skill_name):
+        return {
+            "operation": operation,
+            "skill_name": skill_name,
+            "response": f"Error: Invalid skill name '{skill_name}'. Must be kebab-case (e.g., 'my-skill').",
+            "model": "",
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "execution_time": 0.0,
+            "skill_path": None,
+        }
+
+    skill_path = Path("managed-skills") / config.managed_skills_user / skill_name
+
+    # Operation: delete
+    if operation == "delete":
+        if not skill_path.exists():
+            return {
+                "operation": operation,
+                "skill_name": skill_name,
+                "response": f"Error: Skill '{skill_name}' not found in managed-skills/{config.managed_skills_user}/.",
+                "model": "",
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "execution_time": 0.0,
+                "skill_path": str(skill_path),
+            }
+
+        try:
+            import time
+
+            start_time = time.time()
+            shutil.rmtree(skill_path)
+            execution_time = time.time() - start_time
+
+            # Refresh skills index
+            if skills_manager.refresh_index():
+                logger.info(f"Skills index refreshed after deleting '{skill_name}'")
+
+            return {
+                "operation": operation,
+                "skill_name": skill_name,
+                "response": f"Successfully deleted skill '{skill_name}' from managed-skills/{config.managed_skills_user}/.",
+                "model": "",
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "execution_time": execution_time,
+                "skill_path": str(skill_path),
+            }
+        except Exception as e:
+            logger.error(f"Failed to delete skill '{skill_name}': {e}")
+            return {
+                "operation": operation,
+                "skill_name": skill_name,
+                "response": f"Error: Failed to delete skill: {e}",
+                "model": "",
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "execution_time": 0.0,
+                "skill_path": str(skill_path),
+            }
+
+    # Operation: create or update
+    # Validate required parameters
+    if not purpose:
+        return {
+            "operation": operation,
+            "skill_name": skill_name,
+            "response": f"Error: 'purpose' is required for {operation} operation.",
+            "model": "",
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "execution_time": 0.0,
+            "skill_path": str(skill_path),
+        }
+
+    if not detailed_requirements:
+        return {
+            "operation": operation,
+            "skill_name": skill_name,
+            "response": f"Error: 'detailed_requirements' is required for {operation} operation.",
+            "model": "",
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "execution_time": 0.0,
+            "skill_path": str(skill_path),
+        }
+
+    # Check if skill-builder is available
+    try:
+        skill_creator = skills_manager.load_skill("skill-builder")
+    except ValueError as e:
+        return {
+            "operation": operation,
+            "skill_name": skill_name,
+            "response": f"Error: skill-builder not found. Please ensure it's available in the skills directory. {e}",
+            "model": "",
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "execution_time": 0.0,
+            "skill_path": str(skill_path),
+        }
+
+    # Check for existing skill (for create operation)
+    if operation == "create" and skill_path.exists():
+        return {
+            "operation": operation,
+            "skill_name": skill_name,
+            "response": f"Error: Skill '{skill_name}' already exists in managed-skills/{config.managed_skills_user}/. Use operation='update' to modify it.",
+            "model": "",
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "execution_time": 0.0,
+            "skill_path": str(skill_path),
+        }
+
+    # Check for non-existing skill (for update operation)
+    if operation == "update" and not skill_path.exists():
+        return {
+            "operation": operation,
+            "skill_name": skill_name,
+            "response": f"Error: Skill '{skill_name}' not found in managed-skills/{config.managed_skills_user}/. Use operation='create' to create it.",
+            "model": "",
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "execution_time": 0.0,
+            "skill_path": str(skill_path),
+        }
+
+    # Construct user prompt for skill-builder
+    target_path = f"managed-skills/{config.managed_skills_user}/{skill_name}/SKILL.md"
+
+    action_verb = "Create" if operation == "create" else "Update"
+    user_prompt = f"""{action_verb} a skill: {skill_name}
+
+Purpose: {purpose}
+
+Requirements:
+{detailed_requirements}
+"""
+
+    if allowed_tools:
+        user_prompt += f"\nAllowed tools: {allowed_tools}\n"
+
+    if metadata:
+        import json
+
+        user_prompt += f"\nMetadata: {json.dumps(metadata)}\n"
+
+    user_prompt += f"\nWrite SKILL.md to: {target_path}\n"
+
+    # Execute skill-builder with high-performance model
+    try:
+        result = await llm_client.execute_with_skill(
+            skill_name="skill-builder",
+            skill_content=skill_creator.full_content,
+            user_prompt=user_prompt,
+            model=config.skill_builder_model,
+        )
+
+        # Refresh skills index to include the new/updated skill
+        if skills_manager.refresh_index():
+            logger.info(f"Skills index refreshed after {operation} '{skill_name}'")
+        else:
+            logger.warning(
+                f"Failed to refresh skills index after {operation} '{skill_name}'"
+            )
+
+        return {
+            "operation": operation,
+            "skill_name": skill_name,
+            "response": result.response,
+            "model": result.model,
+            "input_tokens": result.input_tokens,
+            "output_tokens": result.output_tokens,
+            "execution_time": result.execution_time,
+            "skill_path": str(skill_path),
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to {operation} skill '{skill_name}': {e}")
+        return {
+            "operation": operation,
+            "skill_name": skill_name,
+            "response": f"Error: Skill {operation} failed: {e}",
+            "model": "",
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "execution_time": 0.0,
+            "skill_path": str(skill_path),
+        }
 
 
 @app.command()

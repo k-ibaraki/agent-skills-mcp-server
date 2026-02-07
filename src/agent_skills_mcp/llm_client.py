@@ -89,6 +89,7 @@ class LLMClient:
         skill_name: str,
         skill_content: str,
         user_prompt: str,
+        model: str | None = None,
     ) -> SkillExecutionResult:
         """Execute a skill by injecting it as system prompt to the LLM.
 
@@ -99,6 +100,7 @@ class LLMClient:
             skill_name: Name of the skill being executed.
             skill_content: Complete skill content (SKILL.md) to use as system prompt.
             user_prompt: User's prompt/request.
+            model: Optional model override. If None, uses default_model from config.
 
         Returns:
             SkillExecutionResult with response, model info, and usage statistics.
@@ -107,8 +109,8 @@ class LLMClient:
             ValueError: If model credentials are not configured.
             Exception: If LLM API call fails.
         """
-        # Use default model from config
-        selected_model = self.default_model
+        # Use specified model or fall back to default
+        selected_model = model if model is not None else self.default_model
 
         # Validate model configuration
         self.config.validate_llm_config(selected_model)
