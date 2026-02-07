@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 # Allowed directories for file operations (security restriction)
 ALLOWED_DIRECTORIES = [
     Path("skills").absolute(),
+    Path("community-skills").absolute(),
+    Path("managed-skills").absolute(),  # MCP tool managed skills
     Path(".tmp").absolute(),
 ]
 
@@ -85,7 +87,9 @@ def file_write(path: str, content: str) -> str:
     """Write content to a file.
 
     For security, only files within allowed directories can be written:
-    - skills/ (skill files)
+    - skills/ (official skills, read-only)
+    - community-skills/ (user-added skills, read-only)
+    - managed-skills/ (MCP-managed skills, read-write)
     - .tmp/ (temporary files)
 
     Args:

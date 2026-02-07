@@ -53,6 +53,23 @@ class SkillsManager:
                     if extra_dir.exists() and extra_dir not in self._all_skills_dirs:
                         self._all_skills_dirs.append(extra_dir)
 
+        # Add managed-skills/{user} directory
+        managed_skills_base = Path("managed-skills").resolve()
+        managed_skills_dir = managed_skills_base / self.config.managed_skills_user
+
+        # Create managed-skills/{user} directory if needed
+        if not managed_skills_dir.exists():
+            managed_skills_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Created managed-skills directory: {managed_skills_dir}")
+
+        # Migrate existing skills from managed-skills/ to managed-skills/{user}/
+        if managed_skills_base.exists():
+            self._migrate_legacy_managed_skills(managed_skills_base, managed_skills_dir)
+
+        # Add managed-skills/{user} to search path
+        if managed_skills_dir not in self._all_skills_dirs:
+            self._all_skills_dirs.append(managed_skills_dir)
+
         self._vector_store = vector_store
         self._vector_store_initialized = False
 
@@ -332,23 +349,67 @@ class SkillsManager:
         )
 
     def refresh_index(self) -> bool:
-        """Refresh the vector store index with current skills.
+        """Refresh skills index after creating/updating/deleting skills.
+
+        This method reloads all skills from disk and rebuilds the vector store
+        index if semantic search is enabled.
 
         Returns:
-            True if refresh was successful, False otherwise.
+            True if refresh succeeded, False otherwise.
         """
-        if not self._vector_store:
+        try:
+            # Reload all skills from disk
+            self._skills = self._load_all_skills()
+
+            # Rebuild vector store if semantic search is enabled
+            if self._vector_store:
+                if self._vector_store.rebuild(self._skills):
+                    self._vector_store_initialized = True
+                    logger.info("Vector store rebuilt successfully")
+                else:
+                    logger.warning("Failed to rebuild vector store")
+
+            return True
+        except Exception as e:
+            logger.error(f"Failed to refresh skills index: {e}")
             return False
 
-        try:
-            all_skills = self._load_all_skills()
-            if self._vector_store.rebuild(all_skills):
-                self._vector_store_initialized = True
-                return True
-            return False
-        except Exception as e:
-            logger.warning(f"Failed to refresh vector store index: {e}")
-            return False
+    def _migrate_legacy_managed_skills(self, base_dir: Path, target_dir: Path) -> None:
+        """Migrate legacy skills from managed-skills/ to managed-skills/{user}/.
+
+        This method checks for skill directories directly under managed-skills/
+        and moves them to managed-skills/{user}/ for the new structure.
+
+        Args:
+            base_dir: The managed-skills/ base directory.
+            target_dir: The managed-skills/{user}/ target directory.
+        """
+        import shutil
+
+        if not base_dir.exists() or not base_dir.is_dir():
+            return
+
+        # Find all directories directly under managed-skills/
+        for item in base_dir.iterdir():
+            # Skip the user subdirectory itself
+            if item == target_dir:
+                continue
+
+            # Only process directories with SKILL.md
+            if item.is_dir() and (item / "SKILL.md").exists():
+                target_path = target_dir / item.name
+
+                # Skip if already migrated
+                if target_path.exists():
+                    logger.info(f"Skill already migrated, skipping: {item.name}")
+                    continue
+
+                # Move the skill directory
+                try:
+                    shutil.move(str(item), str(target_path))
+                    logger.info(f"Migrated skill '{item.name}' to {target_dir.name}/")
+                except Exception as e:
+                    logger.error(f"Failed to migrate skill '{item.name}': {e}")
 
 
 # Import at end to avoid circular import
