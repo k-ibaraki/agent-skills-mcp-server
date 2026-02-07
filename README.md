@@ -254,7 +254,7 @@ docker compose down
 
 **検索例**:
 - `query="天気予報"` → `weather-forecast` スキルが上位にヒット
-- `query="ドキュメント検索"` → `notepm-search` スキルが上位にヒット
+- `query="Webページ要約"` → `web-summary` スキルが上位にヒット
 - `query="code review"` → `code-review` スキルが上位にヒット
 
 **設定** (`.env`):
