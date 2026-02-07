@@ -479,12 +479,13 @@ Requirements:
 
     user_prompt += f"\nWrite SKILL.md to: {target_path}\n"
 
-    # Execute skill-builder
+    # Execute skill-builder with high-performance model
     try:
         result = await llm_client.execute_with_skill(
             skill_name="skill-builder",
             skill_content=skill_creator.full_content,
             user_prompt=user_prompt,
+            model=config.skill_builder_model,
         )
 
         # Refresh skills index to include the new/updated skill

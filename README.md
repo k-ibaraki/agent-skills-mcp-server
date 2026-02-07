@@ -303,7 +303,13 @@ skills-search のスコアが0.5未満の場合、システムが自動的に新
 ```bash
 SKILLS_CREATION_ENABLED=true  # スキル管理機能の有効/無効（デフォルト: 有効）
 MANAGED_SKILLS_USER=default   # サブディレクトリ名（デフォルト: "default"）
+
+# skill-builder実行用のモデル（デフォルト: claude-sonnet-4-5）
+# スキル生成には高性能モデルを推奨（通常のスキル実行とは別に設定可能）
+SKILL_BUILDER_MODEL=anthropic/claude-sonnet-4-5-20250929
 ```
+
+**重要**: スキル生成は複雑なタスクのため、`SKILL_BUILDER_MODEL`にはSonnet以上の高性能モデルの使用を推奨します。通常のスキル実行（`skills_execute`）は`DEFAULT_MODEL`で制御され、Haikuなど軽量モデルでも動作します。
 
 ## スキル実行で使用可能なツール
 

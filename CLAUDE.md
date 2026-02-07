@@ -49,6 +49,11 @@ Agent Skills を MCP サーバー経由で管理・実行するシステムで�
 - 環境変数 `SKILLS_CREATION_ENABLED=false` で機能を無効化可能
 - 既存スキルの自動マイグレーション: 初回起動時に managed-skills/ 直下のスキルを managed-skills/default/ に移動
 
+**モデル設定**:
+- スキル生成（skills_manage）: `SKILL_BUILDER_MODEL`（デフォルト: claude-sonnet-4-5）
+- スキル実行（skills_execute）: `DEFAULT_MODEL`（任意のモデル）
+- スキル生成は複雑なタスクのため、高性能モデル（Sonnet以上）を推奨
+
 **使用例**:
 ```python
 # スキル作成
