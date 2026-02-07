@@ -75,11 +75,13 @@ web_fetch を使用するスキルでは、以下を**必ず**記載すること
    - ❌ 悪い: "気象庁APIを使用"
    - ✅ 良い: `https://www.jma.go.jp/bosai/forecast/data/forecast/130000.json`
 
-2. **実装手順を具体的に**
+2. **実装手順を具体的に（WebFetch形式）**
    ```
-   1. web_fetch("https://api.example.com/data")
-   2. JSONレスポンスから必要なフィールドを抽出
-   3. ユーザー向けにフォーマット
+   1. WebFetch(
+        url="https://api.example.com/data",
+        prompt="このJSONデータから{必要な情報}を抽出して整理してください"
+      )
+   2. 取得したデータをユーザー向けにフォーマット
    ```
 
 3. **期待されるレスポンス例を含める**
@@ -183,9 +185,13 @@ https://api.example.com/endpoint/{parameter}
 ```
 
 **実装手順**:
-1. web_fetch で上記URLにアクセス
-2. JSONレスポンスから `data.field1` と `data.field2` を抽出
-3. ユーザー向けにフォーマットして出力
+```
+1. WebFetch(
+     url="https://api.example.com/endpoint/{parameter}",
+     prompt="このJSONデータから data.field1 と data.field2 を抽出して整理してください"
+   )
+2. ユーザー向けにフォーマットして出力
+```
 
 ### {その他の必要な情報}
 
@@ -417,8 +423,14 @@ https://www.jma.go.jp/bosai/forecast/data/forecast/{area_code}.json
 
 **処理**:
 1. 地域コード決定（東京 = 130000）
-2. web_fetch("https://www.jma.go.jp/bosai/forecast/data/forecast/130000.json")
-3. JSONレスポンスを解析
+2. WebFetch を実行:
+   ```
+   WebFetch(
+     url="https://www.jma.go.jp/bosai/forecast/data/forecast/130000.json",
+     prompt="この気象庁の予報JSONデータから今日と明日の天気と気温を抽出して整理してください"
+   )
+   ```
+3. 期待されるJSONレスポンス:
    ```json
    {
      "timeSeries": [{
@@ -431,7 +443,7 @@ https://www.jma.go.jp/bosai/forecast/data/forecast/{area_code}.json
      }]
    }
    ```
-4. `timeSeries[0].areas[0]` から天気と気温を抽出
+4. WebFetch が自動的に `timeSeries[0].areas[0]` から天気と気温を抽出
 
 **出力**:
 ```
@@ -494,9 +506,11 @@ https://www.jma.go.jp/bosai/forecast/data/forecast/{area_code}.json
    https://www.jma.go.jp/bosai/forecast/data/forecast/130000.json
 
    ### 実装手順
-   1. web_fetch で上記URLにアクセス
-   2. JSONレスポンスから timeSeries[0].areas[0] を取得
-   3. weathers フィールドから天気情報を抽出
+   1. WebFetch(
+        url="https://www.jma.go.jp/bosai/forecast/data/forecast/130000.json",
+        prompt="この気象庁の予報JSONデータから天気と気温を抽出してください"
+      )
+   2. WebFetch が自動的にJSONをパースして必要な情報を抽出
    ```
 
    **悪い例**:
@@ -513,7 +527,8 @@ https://www.jma.go.jp/bosai/forecast/data/forecast/{area_code}.json
 ## 注意事項
 
 - **scripts/ ディレクトリは作成しない**: すべてfile_write で直接SKILL.md作成
+- **WebFetch 形式を使用**: `WebFetch(url="...", prompt="...")` の形式で記述（weather-forecast 参照）
 - **web_fetch を積極的に使用**: 外部情報が必要な場合は積極的に活用
 - **軽量性を保つ**: 不要な説明は省略し、実用的な内容のみ含める
-- **参考例を活用**: weather-forecast, example-skill を適宜参照
+- **参考例を活用**: weather-forecast を file_read で確認して同じスタイルを使用
 - **適切な言語を選択**: ユーザーの要求言語に合わせて記述
