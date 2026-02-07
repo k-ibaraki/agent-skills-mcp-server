@@ -163,8 +163,8 @@ mcp = FastMCP(
 Workflow:
 1. Search: skills_search for relevant skills
 2. Evaluate search results:
-   - Score < 0.4 → CREATE new skill immediately
-   - Score ≥ 0.4 → TRY executing with skills_execute
+   - Score < 0.5 → CREATE new skill immediately
+   - Score ≥ 0.5 → TRY executing with skills_execute
 3. Evaluate execution results:
    - Result is insufficient/wrong/incomplete → CREATE new skill
    - Result is good → Done
@@ -191,8 +191,8 @@ async def skills_search(
     """Search for Agent Skills by semantic matching. Returns skills with relevance scores (0-1).
 
     Score Guide:
-    - ≥0.4: Use existing skill
-    - <0.4 or 0 results: Create new skill with skills_manage
+    - ≥0.5: Use existing skill
+    - <0.5 or 0 results: Create new skill with skills_manage
 
     Create new when: Low score, missing features, or doesn't match requirements.
 
