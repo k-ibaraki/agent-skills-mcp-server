@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y curl gnupg && \
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock LICENSE ./
 
 RUN uv sync --frozen --no-cache
 
