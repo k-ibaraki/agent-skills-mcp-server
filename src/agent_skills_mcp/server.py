@@ -158,23 +158,15 @@ def _create_auth_provider():
 mcp = FastMCP(
     "agent-skills-mcp-server",
     auth=_create_auth_provider(),
-    instructions="""Agent Skills - Proactive Skill Creation
+    instructions="""Agent Skills - Proactive & Generalized Skill Creation
 
-Workflow:
-1. Search: skills_search for relevant skills
-2. Evaluate search results:
-   - Score < 0.5 → CREATE new skill immediately
-   - Score ≥ 0.5 → TRY executing with skills_execute
-3. Evaluate execution results:
-   - Result is insufficient/wrong/incomplete → CREATE new skill
-   - Result is good → Done
-4. Create WITHOUT asking: skills_manage(create) immediately when needed
+Workflow: skills_search → Evaluate (score <0.5 → CREATE, ≥0.5 → TRY execute) → If insufficient → CREATE
 
-Examples:
-A) Low score: "花粉情報" → weather-forecast (0.3) → CREATE pollen-forecast → execute
-B) Try first: "天気" → weather-forecast (0.8) → execute → insufficient detail → CREATE detailed-weather → execute
+CRITICAL: Create GENERALIZED skills with PARAMETERS.
+Extract variables (location, time, category) from requests for reusability.
+❌ BAD: "tokyo-weather" ✅ GOOD: "weather-forecast" (location param)
 
-Be proactive - create new skills when search OR execution results are insufficient.""",
+Be proactive - create GENERALIZED skills when search/execution is insufficient.""",
 )
 
 # Initialize managers
@@ -188,21 +180,14 @@ async def skills_search(
     name_filter: str | None = None,
     limit: int | None = None,
 ) -> list[dict]:
-    """Search for Agent Skills by semantic matching. Returns skills with relevance scores (0-1).
+    """Search skills by semantic matching. Returns skills with scores (0-1).
 
-    Score Guide:
-    - ≥0.5: Use existing skill
-    - <0.5 or 0 results: Create new skill with skills_manage
-
-    Create new when: Low score, missing features, or doesn't match requirements.
+    Score <0.5 or 0 results → CREATE new skill with skills_manage.
 
     Args:
-        query: Search query for descriptions (semantic).
-        name_filter: Filter by name prefix.
-        limit: Max results (default: 10).
-
-    Returns:
-        List with metadata and score. Low score → create new skill.
+        query: Search query (semantic)
+        name_filter: Name prefix filter
+        limit: Max results (default: 10)
     """
     results = skills_manager.search_skills(
         query=query, name_filter=name_filter, limit=limit
@@ -222,14 +207,11 @@ async def skills_execute(
     skill_name: str,
     user_prompt: str,
 ) -> dict:
-    """Execute an Agent Skill with the LLM.
-
-    After execution, evaluate if the result meets user requirements.
-    If insufficient, create a new skill with skills_manage.
+    """Execute skill with LLM. Evaluate result; if insufficient, create new skill.
 
     Args:
-        skill_name: Name of the skill to execute.
-        user_prompt: User's request to process with the skill.
+        skill_name: Skill to execute
+        user_prompt: User's request
     """
     # Load skill
     skill = skills_manager.load_skill(skill_name)
@@ -260,39 +242,18 @@ async def skills_manage(
     allowed_tools: str | None = None,
     metadata: dict | None = None,
 ) -> dict:
-    """Manage Agent Skills (create, update, delete).
+    """Create/update/delete skills. CRITICAL: Create GENERALIZED, REUSABLE skills with PARAMETERS.
 
-    Use this tool when skills_search returns no results and you need to create
-    a custom skill for the user's specific requirements.
-
-    This tool provides unified skill management using the skill-builder.
-    Skills are stored in the managed-skills/ directory, separate from
-    official and community skills.
+    Extract variables (location, time, category) from user requests for reusability.
+    ❌ BAD: "tokyo-weather" (hardcoded) ✅ GOOD: "weather-forecast" (location param)
 
     Args:
-        operation: Operation to perform ("create", "update", or "delete").
-        skill_name: Name of the skill in kebab-case (e.g., "my-new-skill").
-        purpose: Brief description of the skill's purpose (required for create/update).
-        detailed_requirements: Detailed requirements (required for create/update):
-            - What the skill should do
-            - Expected inputs and outputs
-            - Specific workflows or patterns
-            - Tools needed (web_fetch, file_read, shell, etc.)
-        allowed_tools: Optional comma-separated list of tools (e.g., "web_fetch,file_read").
-        metadata: Optional metadata dict (e.g., {"author": "...", "version": "1.0"}).
-
-    Returns:
-        Dict with operation result:
-        - operation: Operation performed
-        - skill_name: Name of the skill
-        - response: Result message or error
-        - model: Model used (for create/update)
-        - input_tokens, output_tokens: Token usage (for create/update)
-        - execution_time: Time taken
-        - skill_path: Path to the skill directory
-
-    Raises:
-        ValueError: If operation is invalid or skill-builder is not available.
+        operation: "create", "update", or "delete"
+        skill_name: Kebab-case name (e.g., "restaurant-finder")
+        purpose: GENERALIZED purpose (required for create/update)
+        detailed_requirements: What to do, inputs (PARAMETERS), outputs, tools (required for create/update)
+        allowed_tools: Comma-separated tools (e.g., "web_fetch,file_read")
+        metadata: Optional dict (e.g., {"author": "...", "version": "1.0"})
     """
     import re
     import shutil
